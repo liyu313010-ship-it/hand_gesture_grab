@@ -3,7 +3,8 @@
 
 一个基于 [TensorFlow.js](https://github.com/tensorflow 和 [MediaPipe Hands](https://github.com/tensorflow/tfjs-models/blob/master/hand-pose-detection/demos/live_video/src/index.js) 的手势识别交互应用，可以通过摄像头实时检测手部动作并实现虚拟物品抓取交互。
 ![alt text](image.png)
-
+## 视频教程
+https://www.bilibili.com/video/BV1AgezzUEGK/?vd_source=610a594fa963f7a0a861e63e55503d54
 ## 🌟 功能特性
 
 -   ​**实时手部检测**​：使用 MediaPipe Hands 模型检测手部21个关键点
