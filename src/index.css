@@ -1,0 +1,240 @@
+ * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #1a2a6c, #b21f1f, #fdbb2d);
+        color: white;
+        min-height: 100vh;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+        width: 100%;
+      }
+
+      h1 {
+        font-size: 2.8rem;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .subtitle {
+        font-size: 1.2rem;
+        opacity: 0.9;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .container {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 30px;
+        width: 100%;
+        max-width: 1200px;
+      }
+
+      .camera-section,
+      .interaction-section {
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+      }
+
+      .camera-section {
+        flex: 1;
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .interaction-section {
+        flex: 1;
+        min-width: 300px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .video-container {
+        position: relative;
+        width: 100%;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 20px;
+      }
+
+      video {
+        width: 100%;
+        border-radius: 10px;
+        transform: scaleX(-1);
+        background: #000;
+      }
+
+      canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      .interaction-area {
+        width: 100%;
+        height: 300px;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 10px;
+        position: relative;
+        margin-bottom: 20px;
+        overflow: hidden;
+        border: 2px solid rgba(255, 255, 255, 0.2);
+      }
+
+      .object {
+        position: absolute;
+        border-radius: 10px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        font-weight: bold;
+        user-select: none;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .object:hover {
+        transform: scale(1.05);
+      }
+
+      .object-1 {
+        width: 80px;
+        height: 80px;
+        background: linear-gradient(45deg, #ff416c, #ff4b2b);
+        top: 50px;
+        left: 50px;
+      }
+
+      .object-2 {
+        width: 70px;
+        height: 70px;
+        background: linear-gradient(45deg, #1e3c72, #2a5298);
+        top: 150px;
+        left: 180px;
+      }
+
+      .object-3 {
+        width: 90px;
+        height: 60px;
+        background: linear-gradient(45deg, #00c9ff, #92fe9d);
+        top: 70px;
+        left: 280px;
+      }
+      .object-4 {
+        width: 90px;
+        height: 80px;
+        background: linear-gradient(45deg, #89ff03, #32ee9d);
+        top: 170px;
+        left: 80px;
+      }
+
+      .status {
+        margin-top: 15px;
+        font-size: 1.1rem;
+        text-align: center;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        width: 100%;
+      }
+
+      .instructions {
+        margin-top: 30px;
+        background: rgba(0, 0, 0, 0.2);
+        padding: 20px;
+        border-radius: 10px;
+        max-width: 800px;
+      }
+
+      .instructions h2 {
+        margin-bottom: 15px;
+        text-align: center;
+      }
+
+      .instructions ul {
+        list-style-type: none;
+        padding: 0;
+      }
+
+      .instructions li {
+        margin-bottom: 10px;
+        padding-left: 25px;
+        position: relative;
+      }
+
+      .instructions li:before {
+        content: '•';
+        color: #fdbb2d;
+        font-size: 1.5rem;
+        position: absolute;
+        left: 0;
+        top: -5px;
+      }
+
+      .btn {
+        background: linear-gradient(45deg, #00c9ff, #92fe9d);
+        border: none;
+        padding: 12px 25px;
+        border-radius: 50px;
+        color: #1a2a6c;
+        font-weight: bold;
+        cursor: pointer;
+        margin: 10px 0;
+        transition: all 0.3s;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+      }
+
+      .btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+      }
+
+      .btn:active {
+        transform: translateY(0);
+      }
+
+      .grabbing {
+        animation: pulse 0.5s infinite alternate;
+      }
+
+      @keyframes pulse {
+        from {
+          box-shadow: 0 0 10px #00c9ff;
+        }
+        to {
+          box-shadow: 0 0 20px #00c9ff, 0 0 30px #00c9ff;
+        }
+      }
+
+      @media (max-width: 768px) {
+        .container {
+          flex-direction: column;
+        }
+
+        h1 {
+          font-size: 2rem;
+        }
+      }

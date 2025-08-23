@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TensorFlow.js 手势抓取物品（语音版）</title>
+    <link rel="stylesheet" href="./src/index.css">
+  </head>
+  <body>
+    <header>
+      <h1>TensorFlow.js 手势抓取物品（语音版）</h1>
+      <p class="subtitle">使用手部姿态检测模型识别您的手势，抓取并移动屏幕上的虚拟物品</p>
+    </header>
+
+    <div class="container">
+      <div class="camera-section">
+        <h2>实时摄像头反馈</h2>
+        <div class="video-container">
+          <video id="video" autoplay playsinline></video>
+          <canvas id="output"></canvas>
+        </div>
+        <button id="startBtn" class="btn">启动摄像头</button>
+        <div id="status" class="status">状态: 等待启动...</div>
+      </div>
+
+      <div class="interaction-section">
+        <h2>交互区域</h2>
+        <div class="interaction-area">
+          <div class="object object-1">物品 1</div>
+          <div class="object object-2">物品 2</div>
+          <div class="object object-3">物品 3</div>
+          <div class="object object-4">物品 4</div>
+        </div>
+        <div id="interactionStatus" class="status">手势状态: 未检测到手势</div>
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h2>使用说明</h2>
+      <ul>
+        <li>点击"启动摄像头"按钮授权摄像头使用权限</li>
+        <li>将您的手放在摄像头前，确保手部清晰可见</li>
+        <li>张开手掌移动光标到物品上方</li>
+        <li>做出抓取手势（握拳）来抓取物品</li>
+        <li>移动您的手来移动抓取的物品</li>
+        <li>再次张开手掌释放物品</li>
+      </ul>
+    </div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
