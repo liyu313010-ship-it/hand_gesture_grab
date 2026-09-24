@@ -19,12 +19,7 @@ const reactionImages = {
     '节拍耳机': headphoneReaction,
     '守护天使': angelReaction,
     '庆祝彩带': celebrateReaction,
-    '魔法星星': magicReaction,
-    '能量球': magicReaction,
-    '珊瑚光球': magicReaction,
-    '青空光球': magicReaction,
-    '星云光球': magicReaction,
-    '极光光球': magicReaction
+    '魔法星星': magicReaction
 };
 
 // 抓取时的偏移量（记录光标与物品抓取点的偏移）
@@ -430,12 +425,13 @@ function tryGrabObject(cursorX, cursorY) {
         // 如果距离足够近，则抓取物品
         const grabRadius = obj.classList.contains('gesture-ball') ? objRect.width * .58 : 50;
         if (distance < grabRadius) {
-            if (timer) {
-                clearTimeout(timer);
+            const isVideoBall = obj.classList.contains('video-gesture-ball');
+            if (!isVideoBall) {
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(() => {
+                    voice.synthesizeSpeechSentenceBySentence("抓取" + (obj.dataset.name || '收藏品'));
+                }, 500);
             }
-            timer = setTimeout(() => {
-                voice.synthesizeSpeechSentenceBySentence("抓取" + (obj.dataset.name || '收藏品'));
-            }, 500);
 
             // 正确计算偏移量：光标位置 - 物品当前位置
             grabOffset = {
@@ -447,7 +443,7 @@ function tryGrabObject(cursorX, cursorY) {
             bringToFront(obj);
             obj.classList.add('grabbing');
             createSoftParticles(obj, 'grab');
-            showReaction(obj);
+            if (!isVideoBall) showReaction(obj);
             break;
         }
     }
@@ -563,6 +559,10 @@ function resetInteraction() {
     endPointerDrag();
     removeCursor();
     liveHandState.active = false;
+    if (reactionTimer) clearTimeout(reactionTimer);
+    const popup = document.getElementById('reactionPopup');
+    popup?.classList.remove('show');
+    popup?.setAttribute('aria-hidden', 'true');
 }
 
 export { updateInteraction, resetInteraction, resetVideoBalls, grabbedObject };
