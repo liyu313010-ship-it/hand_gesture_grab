@@ -156,7 +156,7 @@ function initialiseBallState(ball, index, area, force = false) {
         x: Math.max(0, Math.min(area.clientWidth - size, spawn * area.clientWidth - size / 2)),
         y: -size - index * 68,
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
-        vy: 18 + index * 8,
+        vy: 10 + index * 5,
         lastHit: 0
     };
     ballStates.set(ball, state);
@@ -172,7 +172,7 @@ function respawnBall(ball, state, index, area) {
     state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
     state.y = -size - 24 - index * 18;
     state.vx = (Math.random() - .5) * 86;
-    state.vy = 18 + Math.random() * 22;
+    state.vy = 10 + Math.random() * 9;
     state.lastHit = 0;
     ball.classList.remove('ball-respawn');
     void ball.offsetWidth;
@@ -237,7 +237,7 @@ function animateVideoBalls(frameTime) {
             }
 
             // 较缓的重力和终端速度，为摄像头手势托举、拍击与抓取留出反应时间。
-            state.vy = Math.min(state.vy + 155 * elapsed, 180);
+            state.vy = Math.min(state.vy + 95 * elapsed, 110);
 
             if (handIsLive && liveHandState.gesture === '张开手势') {
                 const ballX = state.x + size / 2;

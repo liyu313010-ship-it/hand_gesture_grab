@@ -325,6 +325,12 @@ canvas { z-index: 2; }
 .alphabet-key.active small { color: #5b4200; }
 .encoding-tip { margin-top: 3px; color: #6e879a; font-size: .6rem; text-align: center; }
 
+/* 三个模式相互独立：只有字母模式显示并运行字母结果区。 */
+body:not([data-mode='letters']) .recognition-panel,
+body:not([data-mode='letters']) .two-hand-math,
+body:not([data-mode='letters']) .alphabet-map,
+body:not([data-mode='letters']) .encoding-tip { display: none; }
+
 .interaction-area {
   position: relative;
   flex: 1 1 auto;

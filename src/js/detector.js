@@ -84,7 +84,16 @@ function detectHands(video, canvas, detector) {
 
         // 分析手势
         analyzeGesture(hands[0]);
-        analyzeLetters(hands);
+        if (document.body.dataset.mode === 'letters') {
+          analyzeLetters(hands);
+        } else {
+          // 收藏品和球体模式只保留手势交互，不执行字母编码与英文播报。
+          currentFingerCount = 0;
+          currentLetter = '—';
+          leftCountHistory = [];
+          rightCountHistory = [];
+          lastSpokenLetter = '';
+        }
 
         // 更新交互
         updateInteraction(hands[0], canvas, currentGesture, handPosition);

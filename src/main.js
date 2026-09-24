@@ -42,6 +42,7 @@ function setMode(mode) {
   const selectedMode = MODE_CONFIG[mode] ? mode : 'letters';
   document.body.dataset.mode = selectedMode;
   resetInteraction();
+  if (selectedMode !== 'letters') window.speechSynthesis?.cancel();
 
   document.querySelectorAll('.mode-button').forEach((button) => {
     const active = button.dataset.mode === selectedMode;
