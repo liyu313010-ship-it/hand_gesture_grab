@@ -17,16 +17,26 @@ function updateRecognitionStatus(fingerCount, letter, details = {}) {
     const rightElement = document.getElementById('rightCount');
     const leftCodeElement = document.getElementById('leftCode');
     const rightCodeElement = document.getElementById('rightCode');
+    const operatorElement = document.getElementById('codeOperator');
     const sumElement = document.getElementById('sumCount');
     const codeElement = document.getElementById('letterCode');
+    const modeLetterElement = document.getElementById('modeLetterResult');
+    const modeCodeElement = document.getElementById('modeCodeResult');
     if (countElement) countElement.textContent = String(fingerCount);
     if (letterElement) letterElement.textContent = letter;
     if (leftElement) leftElement.textContent = String(details.leftCount ?? 0);
     if (rightElement) rightElement.textContent = String(details.rightCount ?? 0);
-    if (leftCodeElement) leftCodeElement.textContent = String(details.leftCount ?? 0);
-    if (rightCodeElement) rightCodeElement.textContent = String(details.rightCount ?? 0);
+
+    // 字母编码行：两侧都有手指数时展示“2 与 3 → 23”，否则只展示单侧数字“3 → 3”。
+    const paired = Boolean(details.paired);
+    const soloCount = (details.leftCount ?? 0) + (details.rightCount ?? 0);
+    if (leftCodeElement) leftCodeElement.textContent = String(paired ? details.leftCount ?? 0 : soloCount);
+    if (rightCodeElement) rightCodeElement.textContent = paired ? String(details.rightCount ?? 0) : '';
+    if (operatorElement) operatorElement.textContent = paired ? '与' : '';
     if (sumElement) sumElement.textContent = String(details.totalCount ?? fingerCount);
     if (codeElement) codeElement.textContent = String(details.code ?? 0);
+    if (modeLetterElement) modeLetterElement.textContent = letter;
+    if (modeCodeElement) modeCodeElement.textContent = String(details.code ?? fingerCount);
 
     document.querySelectorAll('.alphabet-key').forEach(key => {
         key.classList.toggle('active', key.dataset.letter === letter);

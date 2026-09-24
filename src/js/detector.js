@@ -1,7 +1,7 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import { drawHands, clearCanvas } from './renderer.js';
 import { updateInteraction } from './interaction.js';
-import { recognizeAlphabet } from './gesture-recognition.js';
+import { recognizeAlphabet, fingerCountToLetter } from './gesture-recognition.js';
 import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
 import { initSpeechSynthesis } from './voice.js';
 
@@ -10,20 +10,45 @@ let currentGesture = '未检测到手势';
 let handPosition = { x: 0, y: 0 };
 let currentFingerCount = 0;
 let currentLetter = '—';
-let recognitionHistory = [];
+const SMOOTH_WINDOW = 6;
+let leftCountHistory = [];
+let rightCountHistory = [];
 let lastSpokenLetter = '';
 const letterVoice = initSpeechSynthesis();
 
-function smoothRecognition(nextRecognition) {
-  recognitionHistory.push(nextRecognition);
-  if (recognitionHistory.length > 7) recognitionHistory.shift();
+function pushWindow(list, value) {
+  list.push(value);
+  if (list.length > SMOOTH_WINDOW) list.shift();
+}
 
+function modeOf(values) {
   const frequencies = new Map();
-  for (const recognition of recognitionHistory) {
-    frequencies.set(recognition.code, (frequencies.get(recognition.code) ?? 0) + 1);
+  for (const value of values) {
+    frequencies.set(value, (frequencies.get(value) ?? 0) + 1);
   }
-  const stableCode = [...frequencies.entries()].sort((a, b) => b[1] - a[1])[0][0];
-  return [...recognitionHistory].reverse().find(item => item.code === stableCode) || nextRecognition;
+  return [...frequencies.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+// 对左右两侧的手指数分别做多帧多数表决再拼接编码，
+// 避免单帧关键点抖动造成手指数跳变、字母频繁闪烁。
+function smoothRecognition(nextRecognition) {
+  // 已检测到手但五指均收拢时立即显示0，不让前几帧的伸指结果继续占多数。
+  if (nextRecognition.totalCount === 0) {
+    leftCountHistory = [0];
+    rightCountHistory = [0];
+    return { ...nextRecognition, code: 0, paired: false, letter: '—' };
+  }
+
+  pushWindow(leftCountHistory, nextRecognition.leftCount);
+  pushWindow(rightCountHistory, nextRecognition.rightCount);
+
+  const leftCount = modeOf(leftCountHistory);
+  const rightCount = modeOf(rightCountHistory);
+  const totalCount = leftCount + rightCount;
+  const paired = leftCount >= 1 && rightCount >= 1;
+  const code = paired ? Number(`${leftCount}${rightCount}`) : totalCount;
+
+  return { leftCount, rightCount, totalCount, code, paired, letter: fingerCountToLetter(code) };
 }
 
 // 初始化检测器
@@ -67,14 +92,16 @@ function detectHands(video, canvas, detector) {
         currentGesture = '未检测到手势';
         currentFingerCount = 0;
         currentLetter = '—';
-        recognitionHistory = [];
+        leftCountHistory = [];
+        rightCountHistory = [];
         lastSpokenLetter = '';
         updateInteractionStatus(currentGesture);
         updateRecognitionStatus(currentFingerCount, currentLetter, {
           leftCount: 0,
           rightCount: 0,
           totalCount: 0,
-          code: 0
+          code: 0,
+          paired: false
         });
       }
 
@@ -120,11 +147,18 @@ function analyzeGesture(hand) {
       currentGesture = '张开手势';
     }
 
-    // 更新手部位置（使用掌心位置）
-    const wrist = hand.keypoints.find(k => k.name === 'wrist');
-    if (wrist) {
-      handPosition.x = wrist.x;
-      handPosition.y = wrist.y;
+    if (currentGesture === '抓取手势') {
+      // 捏合时使用两指中点，球体会在真实捏合位置被抓住。
+      handPosition.x = (thumbTip.x + indexTip.x) / 2;
+      handPosition.y = (thumbTip.y + indexTip.y) / 2;
+    } else {
+      // 张开手掌时使用掌心位置，便于从下方托举或快速拍击球体。
+      const palmNames = ['wrist', 'index_finger_mcp', 'middle_finger_mcp', 'ring_finger_mcp', 'pinky_finger_mcp'];
+      const palmPoints = palmNames
+        .map(name => hand.keypoints.find(point => point.name === name))
+        .filter(Boolean);
+      handPosition.x = palmPoints.reduce((sum, point) => sum + point.x, 0) / palmPoints.length;
+      handPosition.y = palmPoints.reduce((sum, point) => sum + point.y, 0) / palmPoints.length;
     }
   }
 
@@ -133,7 +167,8 @@ function analyzeGesture(hand) {
 
 function analyzeLetters(hands) {
   const recognition = smoothRecognition(recognizeAlphabet(hands));
-  currentFingerCount = recognition.totalCount;
+  // 顶部大数字展示最终编码，与字母保持一致：单手 1—5 指，双手为拼接数字。
+  currentFingerCount = recognition.code;
   currentLetter = recognition.letter;
   updateRecognitionStatus(currentFingerCount, currentLetter, recognition);
 

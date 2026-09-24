@@ -30,16 +30,16 @@ const HAND_CONNECTIONS = [
   ['ring_finger_dip', 'ring_finger_tip'],
   
   // 手腕到小指
-  ['wrist', 'pinky_mcp'],
-  ['pinky_mcp', 'pinky_pip'],
-  ['pinky_pip', 'pinky_dip'],
-  ['pinky_dip', 'pinky_tip'],
+  ['wrist', 'pinky_finger_mcp'],
+  ['pinky_finger_mcp', 'pinky_finger_pip'],
+  ['pinky_finger_pip', 'pinky_finger_dip'],
+  ['pinky_finger_dip', 'pinky_finger_tip'],
   
   // 手指之间的连接（手掌）
   ['thumb_cmc', 'index_finger_mcp'],
   ['index_finger_mcp', 'middle_finger_mcp'],
   ['middle_finger_mcp', 'ring_finger_mcp'],
-  ['ring_finger_mcp', 'pinky_mcp']
+  ['ring_finger_mcp', 'pinky_finger_mcp']
 ];
 
 // 绘制手部关键点
@@ -151,10 +151,10 @@ function drawFingerConnections(ctx, keypoints, fingerType) {
       ['ring_finger_dip', 'ring_finger_tip']
     ],
     pinky: [
-      ['wrist', 'pinky_mcp'],
-      ['pinky_mcp', 'pinky_pip'],
-      ['pinky_pip', 'pinky_dip'],
-      ['pinky_dip', 'pinky_tip']
+      ['wrist', 'pinky_finger_mcp'],
+      ['pinky_finger_mcp', 'pinky_finger_pip'],
+      ['pinky_finger_pip', 'pinky_finger_dip'],
+      ['pinky_finger_dip', 'pinky_finger_tip']
     ]
   };
   
@@ -200,11 +200,11 @@ function drawHandOutline(ctx, keypoints) {
     'ring_finger_dip',
     'ring_finger_pip',
     'ring_finger_mcp',
-    'pinky_mcp',
-    'pinky_pip',
-    'pinky_dip',
-    'pinky_tip',
-    'pinky_mcp',
+    'pinky_finger_mcp',
+    'pinky_finger_pip',
+    'pinky_finger_dip',
+    'pinky_finger_tip',
+    'pinky_finger_mcp',
     'wrist'
   ];
   

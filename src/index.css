@@ -80,10 +80,10 @@ body {
 .eyebrow, .section-index, .kicker {
   color: var(--muted);
   font-size: .72rem;
-  font-weight: 700;
+  font-weight: 500;
   letter-spacing: .18em;
 }
-.hero-copy { justify-content: space-between; gap: 36px; padding: 8px 0 7px; }
+.hero-copy { justify-content: space-between; gap: 36px; padding: 6px 0 5px; }
 .kicker { color: var(--mint); margin-bottom: 4px; }
 h1 {
   font-family: 'Noto Sans SC', sans-serif;
@@ -94,8 +94,8 @@ h1 {
 }
 h1 span { color: var(--yellow); }
 .subtitle { width: min(520px, 100%); color: #b7c7d4; font-size: .82rem; line-height: 1.5; }
-.feature-strip { flex-wrap: wrap; gap: 6px; padding-bottom: 9px; }
-.feature-strip span, .model-chip {
+.feature-strip { flex-wrap: wrap; gap: 6px; padding-bottom: 7px; }
+.feature-strip span, .feature-strip .mode-button, .model-chip {
   border: 1px solid var(--line);
   background: rgba(255,255,255,.035);
   border-radius: 999px;
@@ -103,8 +103,22 @@ h1 span { color: var(--yellow); }
   font-size: .68rem;
   padding: 5px 10px;
 }
+.feature-strip .mode-button {
+  appearance: none;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .18s, color .18s, border-color .18s, transform .18s;
+}
+.feature-strip .mode-button:hover { transform: translateY(-1px); border-color: rgba(0,0,0,.45); }
+.feature-strip .mode-button.active {
+  border-color: #080808;
+  background: #080808;
+  color: #fff;
+}
 .dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; }
-.dot-green { background: var(--mint); box-shadow: 0 0 11px var(--mint); }
+/* “本地实时识别”状态灯：未连接为红色、识别运行中为绿色。用固定色值，避免被黑白主题变量覆盖。 */
+.dot-offline { background: #e5484d; box-shadow: 0 0 10px rgba(229,72,77,.55); }
+.dot-online { background: #22c55e; box-shadow: 0 0 11px rgba(34,197,94,.65); }
 
 .workspace {
   flex: 1 1 auto;
@@ -127,6 +141,8 @@ h1 span { color: var(--yellow); }
   display: flex;
   flex-direction: column;
 }
+/* 去掉底部内边距，让识别控制区紧贴面板底线。 */
+.camera-section { padding-bottom: 0; }
 .panel-sticker {
   position: absolute;
   z-index: 4;
@@ -136,7 +152,7 @@ h1 span { color: var(--yellow); }
   height: 52px;
   filter: drop-shadow(0 12px 15px rgba(0,0,0,.32));
 }
-.section-heading { justify-content: space-between; gap: 16px; margin-bottom: 9px; }
+.section-heading { justify-content: space-between; gap: 16px; margin-bottom: 7px; }
 .section-heading h2, .guide h2 { margin-top: 2px; font-size: 1.08rem; }
 .camera-section .section-heading {
   display: grid;
@@ -152,9 +168,11 @@ h1 span { color: var(--yellow); }
 
 .video-container {
   position: relative;
-  height: clamp(235px, 30vh, 290px);
-  margin-top: 10px;
-  flex: 0 0 auto;
+  height: clamp(260px, 36vh, 340px);
+  min-height: 160px;
+  margin-top: 20px;
+  /* 以基准高度吸收面板剩余空间向下撑开；空间不足时自动收缩，避免内容溢出。 */
+  flex: 1 1 auto;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.12);
   border-radius: 18px;
@@ -192,7 +210,7 @@ canvas { z-index: 2; }
   background: var(--coral);
   box-shadow: 0 0 9px var(--coral);
 }
-.camera-controls { gap: 8px; margin-top: 12px; }
+.camera-controls { gap: 8px; margin-top: 22px; }
 .btn {
   flex: 0 0 auto;
   display: flex;
@@ -230,10 +248,10 @@ canvas { z-index: 2; }
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 6px;
   border-radius: 18px;
   background: linear-gradient(135deg, rgba(113,167,255,.09), rgba(108,229,193,.06));
-  padding: 9px 12px;
+  padding: 8px 11px;
 }
 .recognition-item { display: flex; flex-direction: column; align-items: center; gap: 7px; }
 .recognition-label { color: var(--muted); font-size: .65rem; letter-spacing: .08em; }
@@ -257,14 +275,14 @@ canvas { z-index: 2; }
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .two-hand-math > div {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  min-height: 32px;
+  min-height: 29px;
   border: 1px solid var(--line);
   border-radius: 11px;
   background: rgba(255,255,255,.025);
@@ -280,10 +298,10 @@ canvas { z-index: 2; }
   display: grid;
   grid-template-columns: repeat(13, 1fr);
   gap: 3px;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 .alphabet-key {
-  min-height: 25px;
+  min-height: 23px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -305,7 +323,7 @@ canvas { z-index: 2; }
   transform: translateY(-2px);
 }
 .alphabet-key.active small { color: #5b4200; }
-.encoding-tip { margin-top: 5px; color: #6e879a; font-size: .6rem; text-align: center; }
+.encoding-tip { margin-top: 3px; color: #6e879a; font-size: .6rem; text-align: center; }
 
 .interaction-area {
   position: relative;
@@ -327,9 +345,146 @@ canvas { z-index: 2; }
     linear-gradient(90deg, rgba(134,161,183,.075) 1px, transparent 1px);
   background-size: 36px 36px;
 }
-.stage-title { position: absolute; top: 18px; left: 20px; display: flex; flex-direction: column; gap: 2px; }
+.stage-title { position: absolute; z-index: 4; top: 18px; left: 20px; display: flex; flex-direction: column; gap: 2px; pointer-events: none; }
 .stage-title span { color: var(--mint); font-size: .7rem; font-weight: 700; letter-spacing: .17em; }
 .stage-title small { color: #668096; }
+.mode-layer {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: none;
+}
+.mode-layer.active { display: block; }
+.letter-display-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(330px, 60%);
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(0,0,0,.18);
+  border-radius: 34px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 24px 60px rgba(0,0,0,.1);
+}
+.letter-display-card > span { color: #666; font-size: .72rem; letter-spacing: .15em; }
+.letter-display-card strong { font-size: clamp(5rem, 10vw, 8rem); line-height: .92; }
+.letter-display-card small { color: #666; }
+.letter-display-card b { color: #080808; font-size: 1rem; }
+.letter-mode-hint, .ball-mode-hint {
+  position: absolute;
+  right: 20px;
+  bottom: 16px;
+  left: 20px;
+  color: #666;
+  font-size: .68rem;
+  text-align: center;
+}
+.gesture-ball {
+  position: absolute;
+  top: -100px;
+  left: 0;
+  width: var(--ball-size, 82px);
+  height: var(--ball-size, 82px);
+  display: none;
+  place-items: end center;
+  padding-bottom: 12px;
+  border: 1px solid rgba(255,255,255,.76);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 29% 22%, rgba(255,255,255,.98) 0 5%, rgba(255,255,255,.58) 8%, transparent 21%),
+    radial-gradient(circle at 37% 32%, var(--ball-light) 0 12%, var(--ball-main) 37%, var(--ball-deep) 70%, #090b18 100%);
+  box-shadow:
+    inset -16px -19px 28px rgba(0,0,0,.34),
+    inset 12px 9px 20px rgba(255,255,255,.28),
+    0 0 22px var(--ball-glow),
+    0 18px 32px rgba(0,0,0,.3);
+  color: #fff;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  will-change: left, top, transform;
+  transition: box-shadow .2s, filter .2s;
+}
+.video-gesture-ball { z-index: 5; }
+body[data-mode='ball'] .video-gesture-ball { display: grid; }
+.ball-coral { --ball-size: 88px; --ball-light: #ffd0b9; --ball-main: #ff6e62; --ball-deep: #bd164f; --ball-glow: rgba(255,83,105,.52); }
+.ball-cyan { --ball-size: 72px; --ball-light: #c8ffff; --ball-main: #25d9ea; --ball-deep: #1267c9; --ball-glow: rgba(38,221,239,.52); }
+.ball-violet { --ball-size: 96px; --ball-light: #f0d6ff; --ball-main: #ad69ff; --ball-deep: #4a1aa8; --ball-glow: rgba(166,91,255,.5); }
+.ball-lime { --ball-size: 66px; --ball-light: #f3ffd0; --ball-main: #9be95d; --ball-deep: #248653; --ball-glow: rgba(123,226,92,.48); }
+.gesture-ball::after {
+  content: '';
+  position: absolute;
+  right: 19px;
+  bottom: -20px;
+  left: 19px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(0,0,0,.24);
+  filter: blur(8px);
+}
+.gesture-ball span { position: relative; z-index: 2; font-size: .58rem; font-weight: 800; letter-spacing: .08em; text-shadow: 0 1px 6px rgba(0,0,0,.7); pointer-events: none; opacity: .88; }
+.ball-highlight { position: absolute; top: 15%; left: 19%; width: 31%; height: 20%; border-radius: 50%; background: rgba(255,255,255,.8); filter: blur(2px); pointer-events: none; }
+.ball-shine { position: absolute; top: 45%; right: 13%; width: 11%; height: 24%; border-radius: 50%; background: rgba(255,255,255,.25); filter: blur(2px); transform: rotate(-28deg); pointer-events: none; }
+.gesture-ball.grabbing {
+  filter: brightness(1.18) saturate(1.15);
+  box-shadow: inset -12px -14px 22px rgba(0,0,0,.26), inset 12px 9px 18px rgba(255,255,255,.32), 0 0 0 5px rgba(255,255,255,.2), 0 0 34px var(--ball-glow), 0 24px 42px rgba(0,0,0,.3);
+  animation: ball-soft-grab .72s ease-in-out infinite alternate;
+}
+.gesture-ball.ball-bounce { animation: ball-elastic-hit .34s cubic-bezier(.2,.9,.3,1); }
+@keyframes ball-soft-grab {
+  from { transform: scale(.92, 1.07) rotate(-2deg); }
+  to { transform: scale(1.07, .93) rotate(2deg); }
+}
+@keyframes ball-elastic-hit {
+  0% { transform: scale(1); }
+  34% { transform: scale(1.14, .84); }
+  68% { transform: scale(.93, 1.08); }
+  100% { transform: scale(1); }
+}
+.ball-particle-layer { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+.soft-particle {
+  position: absolute;
+  width: var(--particle-size, 8px);
+  height: var(--particle-size, 8px);
+  border-radius: 50%;
+  background: var(--particle-color, #fff);
+  box-shadow: 0 0 10px var(--particle-color, #fff);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.4);
+  animation: soft-particle-release .72s cubic-bezier(.18,.7,.24,1) forwards;
+}
+.soft-particle.is-grab { animation-name: soft-particle-grab; }
+@keyframes soft-particle-release {
+  0% { opacity: .9; transform: translate(-50%, -50%) scale(.45); }
+  62% { opacity: .7; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.25); }
+}
+@keyframes soft-particle-grab {
+  0% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.1); }
+  35% { opacity: .82; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(.25); }
+}
+.ball-guide-card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(430px, 72%);
+  padding: 26px 30px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(0,0,0,.18);
+  border-radius: 28px;
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 24px 60px rgba(0,0,0,.1);
+}
+.ball-guide-card > span { color: #777; font-size: .68rem; letter-spacing: .14em; }
+.ball-guide-card strong { display: block; margin: 6px 0 14px; font-size: 1.08rem; }
+.ball-guide-card ol { display: grid; gap: 8px; padding-left: 20px; color: #555; font-size: .75rem; }
 .object {
   position: absolute;
   z-index: 2;
@@ -347,15 +502,26 @@ canvas { z-index: 2; }
   color: var(--text);
   user-select: none;
   cursor: grab;
+  /* 触屏拖拽物品时禁止页面滚动，保证拖拽手势完整。 */
+  touch-action: none;
   transition: border-color .2s, box-shadow .2s, transform .2s;
 }
 .object:hover { border-color: rgba(108,229,193,.52); transform: translateY(-3px); }
 .object img { width: 68px; height: 68px; object-fit: contain; pointer-events: none; }
 .object span { font-size: .7rem; font-weight: 700; pointer-events: none; }
-.object-1 { top: 17%; left: 9%; }
-.object-2 { top: 15%; left: 62%; }
-.object-3 { top: 58%; left: 18%; }
-.object-4 { top: 56%; left: 66%; }
+/* 收藏品错落摆放，打破整齐网格感；各位置互相错开且不重叠。 */
+.object-1 { top: 13%; left: 4%; }
+.object-2 { top: 20%; left: 34%; }
+.object-3 { top: 11%; left: 63%; }
+.object-4 { top: 40%; left: 10%; }
+.object-5 { top: 47%; left: 41%; }
+.object-6 { top: 36%; left: 66%; }
+.object-7 { top: 67%; left: 7%; }
+.object-8 { top: 72%; left: 44%; }
+/* 线条小狗静态素材：收藏台角落的低透明度摆件，位于收藏品下层。 */
+.stage-pup { position: absolute; z-index: 1; }
+.stage-pup-top { top: 10px; right: 14px; width: 92px; opacity: .55; }
+.stage-pup-bottom { right: 10px; bottom: 8px; width: 104px; opacity: .5; }
 .interaction-status { flex: 0 0 auto; width: 100%; margin-top: 8px; }
 .grabbing {
   cursor: grabbing;
@@ -370,8 +536,8 @@ canvas { z-index: 2; }
   display: grid;
   grid-template-columns: .7fr 1.6fr;
   gap: 24px;
-  margin-top: 8px;
-  padding: 9px 14px;
+  margin-top: 6px;
+  padding: 8px 12px;
 }
 .guide-sticker {
   position: absolute;
@@ -427,8 +593,10 @@ canvas { z-index: 2; }
   100% { transform: translateY(-18px) scale(.96); opacity: 0; }
 }
 
-footer { flex: 0 0 22px; justify-content: space-between; gap: 16px; color: #60788c; font-size: .62rem; padding: 4px 4px 0; }
+footer { flex: 0 0 20px; justify-content: space-between; gap: 16px; color: #60788c; font-size: .62rem; padding: 4px 4px 0; }
 .footer-sticker { width: 24px; height: 24px; object-fit: contain; margin-left: auto; }
+/* 线条小狗横向素材作为页脚左端装饰。 */
+.footer-pup { width: 34px; height: 18px; }
 
 @media (max-width: 1050px) {
   body { height: auto; min-height: 100vh; overflow-y: auto; }
@@ -443,13 +611,19 @@ footer { flex: 0 0 22px; justify-content: space-between; gap: 16px; color: #6078
   .hero-sticker { width: 68px; height: 68px; top: 16px; right: 0; opacity: .72; }
   .camera-section, .interaction-section { padding: 16px; }
   .workspace { grid-template-columns: minmax(0, 1fr); }
-  .interaction-area { min-height: 540px; }
+  .interaction-area { min-height: 690px; }
   .object { width: 116px; min-height: 130px; }
   .object img { width: 78px; height: 78px; }
-  .object-1 { top: 80px; left: 5%; }
-  .object-2 { top: 80px; left: 58%; }
-  .object-3 { top: 340px; left: 9%; }
-  .object-4 { top: 330px; left: 60%; }
+  .object-1 { top: 70px; left: 3%; }
+  .object-2 { top: 96px; left: 52%; }
+  .object-3 { top: 218px; left: 5%; }
+  .object-4 { top: 244px; left: 55%; }
+  .object-5 { top: 366px; left: 4%; }
+  .object-6 { top: 392px; left: 53%; }
+  .object-7 { top: 514px; left: 6%; }
+  .object-8 { top: 540px; left: 54%; }
+  /* 窄屏空间有限，隐藏收藏台角落的小狗摆件，优先保证收藏品不重叠。 */
+  .stage-pup { display: none; }
   .guide { grid-template-columns: 1fr; gap: 20px; }
   .guide-sticker, .panel-sticker { display: none; }
   .guide-steps { grid-template-columns: 1fr; }
@@ -480,7 +654,8 @@ body {
 .ambient-one { background: #aaa; opacity: .08; }
 .ambient-two { background: #ddd; opacity: .12; }
 h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
-.subtitle, .feature-strip span, .status { color: #555; }
+.subtitle, .feature-strip span, .feature-strip .mode-button, .status { color: #555; }
+.feature-strip .mode-button.active { color: #fff; }
 .panel { box-shadow: 0 16px 46px rgba(0,0,0,.09); }
 .accent-chip { border-color: rgba(0,0,0,.35); color: #080808; }
 .video-container { background: #000; }
@@ -548,6 +723,8 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
   opacity: .72;
 }
 .sticker-rail img:nth-child(2) { width: 50px; height: 50px; opacity: .92; }
+/* 线条小狗静态素材作为贴纸栏的第 4 个装饰位。 */
+.sticker-rail img:nth-child(4) { width: 46px; height: 46px; opacity: .9; }
 .collection-sticker { right: 142px; transform: rotate(-7deg); }
 
 @media (max-width: 1180px) {
@@ -558,56 +735,60 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
 @media (max-height: 820px) and (min-width: 1051px) {
   body {
     min-height: 0;
-    padding-top: 7px;
-    padding-bottom: 5px;
+    padding-top: 4px;
+    padding-bottom: 3px;
   }
-  .brand-mark { width: 26px; height: 26px; font-size: .68rem; }
+  .brand-mark { width: 24px; height: 24px; font-size: .68rem; }
   .eyebrow, .section-index, .kicker { font-size: .61rem; }
-  .hero-copy { padding: 2px 0 3px; }
+  .kicker { margin-bottom: 2px; }
+  .hero-copy { padding: 0 0 1px; }
   h1 { font-size: clamp(1.7rem, 2.7vw, 2.45rem); }
   .subtitle { font-size: .69rem; line-height: 1.35; }
-  .feature-strip { padding-bottom: 5px; gap: 4px; }
-  .feature-strip span { padding: 3px 8px; font-size: .6rem; }
+  .feature-strip { padding-bottom: 2px; gap: 4px; }
+  .feature-strip span { padding: 2px 7px; font-size: .6rem; }
   .hero-sticker { width: 52px; height: 52px; }
 
   .workspace { gap: 12px; }
   .camera-section, .interaction-section { padding: 9px; }
-  .section-heading { margin-bottom: 5px; }
+  .camera-section { padding-bottom: 0; }
+  .section-heading { margin-bottom: 3px; }
   .section-heading h2, .guide h2 { font-size: .95rem; }
   .model-chip { padding: 4px 8px; font-size: .55rem; }
   .panel-sticker { top: -18px; width: 42px; height: 42px; }
 
-  .video-container { height: clamp(250px, 34vh, 275px); margin-top: 10px; border-radius: 13px; }
-  .camera-controls { margin-top: 12px; }
+  .video-container { height: clamp(270px, 36vh, 320px); border-radius: 13px; }
   .btn { padding: 5px 10px; font-size: .68rem; }
   .status { min-height: 27px; padding: 3px 7px; font-size: .59rem; }
 
-  .recognition-panel { margin-top: 4px; padding: 4px 9px; border-radius: 10px; }
+  .recognition-panel { margin-top: 3px; padding: 3px 9px; border-radius: 10px; }
   .recognition-item { gap: 2px; }
   .recognition-label { font-size: .49rem; }
   .recognition-item strong { font-size: 1.24rem; }
   .recognition-arrow { font-size: 1.08rem; }
-  .two-hand-math { margin-top: 3px; gap: 4px; }
+  .two-hand-math { margin-top: 2px; gap: 4px; }
   .two-hand-math > div { min-height: 23px; font-size: .53rem; }
   .two-hand-math b, .two-hand-math strong { font-size: .75rem; }
-  .alphabet-map { margin-top: 3px; gap: 2px; }
+  .alphabet-map { margin-top: 2px; gap: 2px; }
   .alphabet-key { min-height: 16px; border-radius: 4px; font-size: .5rem; }
   .alphabet-key small { font-size: .37rem; }
-  .encoding-tip { margin-top: 2px; font-size: .44rem; line-height: 1.1; }
+  .encoding-tip { margin-top: 1px; font-size: .44rem; line-height: 1.1; }
 
   .object { width: 88px; min-height: 84px; border-radius: 14px; }
   .object img { width: 54px; height: 54px; }
   .object span { font-size: .6rem; }
+  .stage-pup-top { width: 68px; }
+  .stage-pup-bottom { width: 78px; }
   .interaction-status { margin-top: 5px; }
 
-  .guide { margin-top: 5px; padding: 6px 11px; gap: 16px; }
+  .guide { margin-top: 2px; padding: 4px 10px; gap: 16px; }
   .guide-intro p { margin-top: 1px; font-size: .59rem; }
   .guide-steps li { padding: 1px 7px; }
   .guide-steps strong { font-size: .68rem; }
   .guide-steps span { font-size: .55rem; }
   .guide-sticker { width: 42px; height: 42px; }
-  footer { flex-basis: 16px; padding-top: 2px; font-size: .52rem; }
+  footer { flex-basis: 13px; padding-top: 2px; font-size: .52rem; }
   .footer-sticker { width: 18px; height: 18px; }
   .sticker-rail img { width: 34px; height: 34px; }
   .sticker-rail img:nth-child(2) { width: 40px; height: 40px; }
+  .sticker-rail img:nth-child(4) { width: 38px; height: 38px; }
 }
