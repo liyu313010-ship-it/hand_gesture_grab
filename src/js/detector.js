@@ -1,11 +1,30 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import { drawHands, clearCanvas } from './renderer.js';
 import { updateInteraction } from './interaction.js';
-import { updateStatus, updateInteractionStatus } from './utils.js';
+import { recognizeAlphabet } from './gesture-recognition.js';
+import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
+import { initSpeechSynthesis } from './voice.js';
 
 let detector;
 let currentGesture = '未检测到手势';
 let handPosition = { x: 0, y: 0 };
+let currentFingerCount = 0;
+let currentLetter = '—';
+let recognitionHistory = [];
+let lastSpokenLetter = '';
+const letterVoice = initSpeechSynthesis();
+
+function smoothRecognition(nextRecognition) {
+  recognitionHistory.push(nextRecognition);
+  if (recognitionHistory.length > 7) recognitionHistory.shift();
+
+  const frequencies = new Map();
+  for (const recognition of recognitionHistory) {
+    frequencies.set(recognition.code, (frequencies.get(recognition.code) ?? 0) + 1);
+  }
+  const stableCode = [...frequencies.entries()].sort((a, b) => b[1] - a[1])[0][0];
+  return [...recognitionHistory].reverse().find(item => item.code === stableCode) || nextRecognition;
+}
 
 // 初始化检测器
 async function initDetector() {
@@ -40,12 +59,23 @@ function detectHands(video, canvas, detector) {
 
         // 分析手势
         analyzeGesture(hands[0]);
+        analyzeLetters(hands);
 
         // 更新交互
         updateInteraction(hands[0], canvas, currentGesture, handPosition);
       } else {
         currentGesture = '未检测到手势';
+        currentFingerCount = 0;
+        currentLetter = '—';
+        recognitionHistory = [];
+        lastSpokenLetter = '';
         updateInteractionStatus(currentGesture);
+        updateRecognitionStatus(currentFingerCount, currentLetter, {
+          leftCount: 0,
+          rightCount: 0,
+          totalCount: 0,
+          code: 0
+        });
       }
 
       // 更新状态
@@ -101,10 +131,24 @@ function analyzeGesture(hand) {
   updateInteractionStatus(currentGesture);
 }
 
+function analyzeLetters(hands) {
+  const recognition = smoothRecognition(recognizeAlphabet(hands));
+  currentFingerCount = recognition.totalCount;
+  currentLetter = recognition.letter;
+  updateRecognitionStatus(currentFingerCount, currentLetter, recognition);
+
+  if (currentLetter !== '—' && currentLetter !== lastSpokenLetter) {
+    lastSpokenLetter = currentLetter;
+    letterVoice.speakEnglishLetter(currentLetter);
+  }
+}
+
 export { 
   initDetector, 
   detectHands, 
   stopDetection, 
   currentGesture, 
-  handPosition 
+  handPosition,
+  currentFingerCount,
+  currentLetter
 };

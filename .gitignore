@@ -11,6 +11,10 @@ node_modules
 dist
 dist-ssr
 *.local
+.edge-headless-profile/
+.chrome-layout-profile/
+hand_gesture_page*.png
+layout_test_*.png
 
 # Editor directories and files
 .vscode/*

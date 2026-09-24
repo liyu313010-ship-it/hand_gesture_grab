@@ -1,7 +1,9 @@
 {
-  "name": "hand-post",
+  "name": "liyu-motion-gesture-gallery",
   "private": true,
   "version": "0.0.0",
+  "description": "灵动手势收藏屋：TensorFlow.js双手A-Z识别与动态物品抓取交互",
+  "author": "李雨",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

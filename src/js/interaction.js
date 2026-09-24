@@ -1,6 +1,18 @@
 let grabbedObject = null;
 import { initSpeechSynthesis } from './voice.js';
+import candyReaction from '../../19套表情包素材/蹦蹦跳跳，开心.gif';
+import giftReaction from '../../19套表情包素材/给你惊喜.gif';
+import flowerReaction from '../../19套表情包素材/拿着花花，开心的手舞足蹈.gif';
+import heartReaction from '../../19套表情包素材/开心，爱心包围.gif';
+
 let voice = initSpeechSynthesis();
+
+const reactionImages = {
+    '彩虹棒棒糖': candyReaction,
+    '惊喜礼盒': giftReaction,
+    '向日葵花束': flowerReaction,
+    '爱心抱枕': heartReaction
+};
 
 // 抓取时的偏移量（记录光标与物品抓取点的偏移）
 let grabOffset = { x: 0, y: 0 };
@@ -60,6 +72,28 @@ function showCursor(area, x, y, currentGesture) {
 }
 
 let timer = null;
+let reactionTimer = null;
+
+function showReaction(object) {
+    const popup = document.getElementById('reactionPopup');
+    const image = document.getElementById('reactionImage');
+    const text = document.getElementById('reactionText');
+    const objectName = object.dataset.name || '收藏品';
+
+    if (!popup || !image || !text) return;
+    image.src = reactionImages[objectName] || object.querySelector('img')?.src || '';
+    text.textContent = `已抓取 · ${objectName}`;
+    popup.setAttribute('aria-hidden', 'false');
+    popup.classList.remove('show');
+    void popup.offsetWidth;
+    popup.classList.add('show');
+
+    if (reactionTimer) clearTimeout(reactionTimer);
+    reactionTimer = setTimeout(() => {
+        popup.classList.remove('show');
+        popup.setAttribute('aria-hidden', 'true');
+    }, 1800);
+}
 
 // 尝试抓取物品
 function tryGrabObject(cursorX, cursorY) {
@@ -88,7 +122,7 @@ function tryGrabObject(cursorX, cursorY) {
                 clearTimeout(timer);
             }
             timer = setTimeout(() => {
-                voice.synthesizeSpeechSentenceBySentence("抓取" + obj.innerHTML);
+                voice.synthesizeSpeechSentenceBySentence("抓取" + (obj.dataset.name || '收藏品'));
             }, 500);
 
             // 正确计算偏移量：光标位置 - 物品当前位置
@@ -99,6 +133,7 @@ function tryGrabObject(cursorX, cursorY) {
 
             grabbedObject = obj;
             obj.classList.add('grabbing');
+            showReaction(obj);
             break;
         }
     }

@@ -1,209 +1,112 @@
+# 灵动手势收藏屋
 
-# TensorFlow.js 手势抓取物品
+基于 TensorFlow.js 与 MediaPipe Hands 的浏览器端实时手势交互项目。
 
-一个基于 [TensorFlow.js](https://github.com/tensorflow 和 [MediaPipe Hands](https://github.com/tensorflow/tfjs-models/blob/master/hand-pose-detection/demos/live_video/src/index.js) 的手势识别交互应用，可以通过摄像头实时检测手部动作并实现虚拟物品抓取交互。
-![alt text](image.png)
-## 视频教程
-https://www.bilibili.com/video/BV1AgezzUEGK/?vd_source=610a594fa963f7a0a861e63e55503d54
-## 🌟 功能特性
+![项目界面](docs/界面预览.png)
 
--   ​**实时手部检测**​：使用 MediaPipe Hands 模型检测手部21个关键点
--   ​**手势识别**​：识别抓取和张开手势
--   ​**虚拟交互**​：通过手势抓取和移动屏幕上的虚拟物体
--   ​**语音反馈**​：抓取物品时提供语音提示
--   ​**可视化界面**​：实时显示手部骨架和关键点
+- 项目维护者：李雨
+- 学号：420231159029
+- 课程：智能终端开发
+- 实验：实验四——TensorFlow.js 库的安装和基本调用
 
-## 🛠️ 技术栈
+## 项目功能
 
--   ​**前端框架**​：原生 JavaScript (ES6+)
--   ​**手部检测**​：TensorFlow.js + MediaPipe Hands
--   ​**语音合成**​：Web Speech API
--   ​**样式**​：纯 CSS3
+### A—Z 字母识别
 
-## 📁 项目结构
+- 单手伸出 1—5 根手指时，分别识别为 A—E。
+- 同时检测两只手时，按画面位置区分左侧手和右侧手。
+- 页面实时显示双手加数：`左侧手指数 + 右侧手指数 = 总手指数`。
+- 字母编码公式为：`左侧手指数 × 6 + 右侧手指数`。
+- 编码 1—26 依次映射为 A—Z。
+- 字母稳定变化后，通过 Web Speech API 使用英语播报识别结果。
 
-```
-复制
-hand-post/src
-├── index.html          # 主页面
-├── css/
-│   └── style.css      # 样式文件
-├── js/
-│   ├── app.js         # 主应用文件
-│   ├── camera.js      # 摄像头控制模块
-│   ├── detector.js    # 手势检测模块
-│   ├── renderer.js    # 绘制渲染模块
-│   ├── interaction.js # 交互逻辑模块
-│   ├── voice.js       # 语音合成模块
-│   └── utils.js       # 工具函数
-```
+示例：
 
-## 🚀 快速开始
+| 左侧手 | 右侧手 | 编码 | 字母 |
+| --- | --- | --- | --- |
+| 0 | 1 | 1 | A |
+| 1 | 0 | 6 | F |
+| 2 | 0 | 12 | L |
+| 4 | 2 | 26 | Z |
 
-### 环境要求
+### 动态收藏品抓取
 
--   现代浏览器（Chrome、Firefox、Safari 等）
--   摄像头设备
--   支持 WebGL 的显卡（用于加速 TensorFlow.js）
+项目保留原有的捏合抓取交互：
 
-### 安装步骤
+- 拇指和食指捏合：抓取物品。
+- 移动手掌：拖动物品。
+- 拇指和食指张开：释放物品。
+- 成功抓取时播报真实物品名称。
 
-1.  ​**克隆项目**​
+收藏台中的物品包括：
 
-    ```
-    git clone https://github.com/zou-hong-run/hand-gesture-grab.git
-    cd hand-gesture-grab
-    ```
+- 彩虹棒棒糖
+- 惊喜礼盒
+- 向日葵花束
+- 爱心抱枕
 
-21.  ​**安装依赖**​
+每种物品均使用本地 GIF 动态素材，并配置了与物品语义对应的专属弹出回应动图。
 
-    ```
-    npm install
-    或者
-    pnpm install
-    ```
+## 个性化设计
 
-1.  ​**启动应用**​
+- 项目名称、标题和页脚均使用个人实验作品信息。
+- 重新设计为白色背景、黑色文字的单屏智能终端工作台界面。
+- 标题区、摄像头区、收藏台、使用说明和抓取弹窗均使用动态表情素材。
+- 显示完整 A—Z 字母表，当前识别字母会高亮。
+- 使用 7 帧历史结果平滑识别，减少字母跳动。
+- 模型与视频数据均在浏览器本地处理。
 
-    -   方式一：启动本地服务器
+## 运行方法
 
-        ```
-        pnpm dev
-        或者
-        npm run dev
-        ```
-
-1.  ​**访问应用**​  
-    打开浏览器访问 `http://localhost:5173/`
-
-## 🎮 使用方法
-
-1.  ​**启动摄像头**​：点击"启动摄像头"按钮授权摄像头访问
-
-1.  ​**手势识别**​：
-
-    -   ​**张开手势**​：拇指和食指分开
-    -   ​**抓取手势**​：拇指和食指捏合
-
-1.  ​**交互操作**​：
-
-    -   将虚拟光标移动到物体上方
-    -   做出抓取手势抓取物体
-    -   移动手部来拖动物体
-    -   张开手势释放物体
-
-## 🔧 配置选项
-
-在 `js/detector.js` 中可以调整检测参数：
-
-```
-const detectorConfig = {
-  runtime: 'mediapipe',    // 运行环境
-  modelType: 'full',       // 模型精度：'full' | 'lite'
-  maxHands: 2,            // 最大检测手数
-  solutionPath: "node_modules/@mediapipe/hands/" // 模型路径
-};
+```powershell
+cd D:\hand_gesture_grab
+npm install
+npm run dev
 ```
 
-## 📊 手势检测原理
+浏览器访问：
 
-应用基于手部21个关键点的相对位置关系识别手势：
-
--   ​**抓取手势**​：拇指尖和食指尖距离 < 40px
--   ​**张开手势**​：拇指尖和食指尖距离 ≥ 40px
-
-## 🌐 浏览器兼容性
-
-| 浏览器     | 支持情况    | 备注          |
-| ------- | ------- | ----------- |
-| Chrome  | ✅ 完全支持  | 推荐使用        |
-| Firefox | ✅ 支持    | 需要启用摄像头权限   |
-| Safari  | ⚠️ 部分支持 | 需要 HTTPS    |
-| Edge    | ✅ 支持    | 基于 Chromium |
-
-## 🐛 常见问题
-
-### Q: 摄像头无法启动
-
-A: 确保浏览器有摄像头访问权限，尝试使用 HTTPS 连接
-
-### Q: 模型加载失败
-
-A: 检查网络连接，确保可以访问 MediaPipe CDN
-
-### Q: 检测不准确
-
-A: 确保光线充足，手部在摄像头范围内清晰可见
-
-### Q: 性能问题
-
-A: 尝试使用 'lite' 模型或降低摄像头分辨率
-
-## 📝 API 参考
-
-### 主要函数
-
--   `init()`: 初始化应用
--   `toggleCamera()`: 切换摄像头状态
--   `detectHands()`: 手部检测主循环
--   `analyzeGesture()`: 手势分析
--   `updateInteraction()`: 更新交互状态
-
-### 事件监听
-
--   `startBtn.click`: 摄像头开关
--   `video.onloadedmetadata`: 视频就绪事件
-
-## 🎨 自定义配置
-
-### 修改交互区域
-
-在 `index.html` 中修改 `.interaction-area` 的样式
-
-### 添加新物体
-
-```
-<div class="object" style="left: 100px; top: 100px; background: blue;"></div>
+```text
+http://localhost:5173/
 ```
 
-### 调整手势灵敏度
+点击“启动摄像头”并允许摄像头权限即可开始实验。
 
-在 `js/detector.js` 中修改距离阈值：
+## 生产构建
 
+```powershell
+npm run build
 ```
-// 当前阈值
-const GRAB_THRESHOLD = 40;
+
+构建结果保存在 `dist` 目录。
+
+## 主要文件
+
+```text
+src/
+├── main.js                    页面初始化与摄像头开关
+├── index.css                  个性化页面样式
+└── js/
+    ├── camera.js              摄像头控制
+    ├── detector.js            双手检测、结果平滑与字母播报
+    ├── gesture-recognition.js 手指数统计与 A—Z 编码
+    ├── interaction.js         物品抓取、拖放、语音和动图反馈
+    ├── renderer.js            手部关键点绘制
+    ├── utils.js               页面状态更新
+    └── voice.js               中文物品播报与英文字母播报
 ```
 
-## 🤝 贡献指南
+## 技术栈
 
-1.  Fork 项目
-1.  创建特性分支 (`git checkout -b feature/AmazingFeature`)
-1.  提交更改 (`git commit -m 'Add some AmazingFeature'`)
-1.  推送到分支 (`git push origin feature/AmazingFeature`)
-1.  打开 Pull Request
+- TensorFlow.js
+- MediaPipe Hands
+- Vite
+- 原生 JavaScript、HTML 与 CSS
+- Web Speech API
+- MediaDevices API
 
-## 📄 许可证
+## 说明
 
-本项目采用 MIT 许可证 - 查看 LICENSE 文件了解详情
+本项目由李雨维护，是在 MIT 许可的 `zou-hong-run/hand-gesture-grab` 基础上完成的独立课程实验版本。当前版本重新实现了 A—Z 双手编码、双手加数、英文播报、动态收藏品、专属反馈动图、单屏响应式界面和技术文档，并保留原项目的许可证及上游来源说明。
 
-## 🙏 致谢
-
--   TensorFlow.js
--   MediaPipe
--   Web Speech API
-
-## 📞 联系信息
-
-如有问题或建议，请通过以下方式联系：
-
--   提交 Issue
--   发送邮件至: zhr19853149156@163.com
-
-* * *
-
-⭐ 如果这个项目对你有帮助，请给它一个 Star！
-
-## 赞助（您的支持是我最大的更新动力）
-![alt text](image-1.png)
-![alt text](image-2.png)
+详细实现见 [技术说明](docs/技术说明.md)，操作方法见 [使用手册](docs/使用手册.md)。

@@ -13,6 +13,13 @@ let animationId;
 async function init() {
   video = document.getElementById('video');
   canvas = document.getElementById('output');
+  const alphabetMap = document.getElementById('alphabetMap');
+  if (alphabetMap) {
+    alphabetMap.innerHTML = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+      .split('')
+      .map((letter, index) => `<span class="alphabet-key" data-letter="${letter}"><small>${index + 1}</small>${letter}</span>`)
+      .join('');
+  }
   // 设置按钮事件监听
   document.getElementById('startBtn').addEventListener('click', toggleCamera);
   // 初始化手部检测模型
@@ -32,7 +39,7 @@ async function toggleCamera() {
     voice.synthesizeSpeechSentenceBySentence("摄像头已关闭")
 
     // 关闭摄像头
-    stopCamera();
+    stopCamera(video);
     stopDetection(animationId);
     document.getElementById('startBtn').textContent = '启动摄像头';
     updateStatus('摄像头已关闭');

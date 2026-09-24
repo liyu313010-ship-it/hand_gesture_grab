@@ -3,49 +3,146 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TensorFlow.js 手势抓取物品（语音版）</title>
+    <meta name="theme-color" content="#07101d" />
+    <title>灵动手势收藏屋</title>
     <link rel="stylesheet" href="./src/index.css">
   </head>
   <body>
-    <header>
-      <h1>TensorFlow.js 手势抓取物品（语音版）</h1>
-      <p class="subtitle">使用手部姿态检测模型识别您的手势，抓取并移动屏幕上的虚拟物品</p>
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+    <aside class="sticker-rail sticker-rail-left" aria-hidden="true">
+      <img src="./19套表情包素材/疑惑.gif" alt="">
+      <img src="./19套表情包素材/戴耳机听歌happy.gif" alt="">
+      <img src="./19套表情包素材/扭呀扭.gif" alt="">
+    </aside>
+    <aside class="sticker-rail sticker-rail-right" aria-hidden="true">
+      <img src="./19套表情包素材/开心.gif" alt="">
+      <img src="./19套表情包素材/打字、工作.gif" alt="">
+      <img src="./19套表情包素材/收到爱心.gif" alt="">
+    </aside>
+
+    <header class="hero">
+      <div class="brand-row">
+        <span class="brand-mark">LY</span>
+        <span class="eyebrow">INTELLIGENT TERMINAL LAB · 04</span>
+      </div>
+      <div class="hero-copy">
+        <div>
+          <p class="kicker">TensorFlow.js × MediaPipe Hands</p>
+          <h1><span>灵动手势收藏屋</span></h1>
+        </div>
+        <p class="subtitle">用手指数解锁字母，用捏合动作拾取动态收藏。抓到不同物品时，会弹出专属回应动图。</p>
+      </div>
+      <div class="feature-strip">
+        <span><i class="dot dot-green"></i>本地实时识别</span>
+        <span>1—5 指映射 A—E</span>
+        <span>捏合抓取与拖放</span>
+        <span>专属动图与语音反馈</span>
+      </div>
+      <img class="decor hero-sticker" src="./19套表情包素材/开心的跳起来.gif" alt="开心跳跃动态贴纸">
     </header>
 
-    <div class="container">
-      <div class="camera-section">
-        <h2>实时摄像头反馈</h2>
+    <main class="workspace">
+      <section class="camera-section panel">
+        <img class="decor panel-sticker camera-sticker" src="./19套表情包素材/有学问的样子.gif" alt="智能识别动态贴纸">
+        <div class="section-heading">
+          <div>
+            <span class="section-index">01 / VISION</span>
+            <h2>手势镜头</h2>
+          </div>
+          <span class="model-chip">21 KEYPOINTS</span>
+        </div>
         <div class="video-container">
           <video id="video" autoplay playsinline></video>
           <canvas id="output"></canvas>
+          <span class="live-indicator"><i></i>LIVE</span>
+          <div class="video-placeholder">摄像头画面</div>
         </div>
-        <button id="startBtn" class="btn">启动摄像头</button>
-        <div id="status" class="status">状态: 等待启动...</div>
-      </div>
+        <div class="camera-controls">
+          <button id="startBtn" class="btn"><span>启动摄像头</span><b>→</b></button>
+          <div id="status" class="status">状态：模型初始化中</div>
+        </div>
+        <div class="recognition-panel" aria-live="polite">
+          <div class="recognition-item">
+            <span class="recognition-label">FINGER COUNT / 手指数</span>
+            <strong id="fingerCount">0</strong>
+          </div>
+          <div class="recognition-arrow">→</div>
+          <div class="recognition-item letter-item">
+            <span class="recognition-label">LETTER / 识别字母</span>
+            <strong id="letterResult">—</strong>
+          </div>
+        </div>
+        <div class="two-hand-math">
+          <div><span>双手加数</span><b id="leftCount">0</b><i>+</i><b id="rightCount">0</b><i>=</i><strong id="sumCount">0</strong></div>
+          <div><span>字母编码</span><b id="leftCode">0</b><i>× 6 +</i><b id="rightCode">0</b><i>=</i><strong id="letterCode">0</strong></div>
+        </div>
+        <div id="alphabetMap" class="alphabet-map" aria-label="A到Z字母映射表"></div>
+        <p class="encoding-tip">单手1—5识别A—E；双手编码为“左侧手指数 × 6 + 右侧手指数”。</p>
+      </section>
 
-      <div class="interaction-section">
-        <h2>交互区域</h2>
+      <section class="interaction-section panel">
+        <img class="decor panel-sticker collection-sticker" src="./19套表情包素材/看什么看.gif" alt="趣味动态贴纸">
+        <div class="section-heading">
+          <div>
+            <span class="section-index">02 / COLLECTION</span>
+            <h2>动态收藏台</h2>
+          </div>
+          <span class="model-chip accent-chip">PINCH TO PICK</span>
+        </div>
         <div class="interaction-area">
-          <div class="object object-1">物品 1</div>
-          <div class="object object-2">物品 2</div>
-          <div class="object object-3">物品 3</div>
-          <div class="object object-4">物品 4</div>
+          <div class="stage-grid"></div>
+          <div class="stage-title"><span>MY MOTION SHELF</span><small>用手势移动收藏品</small></div>
+
+          <div class="object object-1" data-name="彩虹棒棒糖">
+            <img src="./19套表情包素材/拿着棒棒糖炫耀.gif" alt="彩虹棒棒糖动态贴纸">
+            <span>彩虹棒棒糖</span>
+          </div>
+          <div class="object object-2" data-name="惊喜礼盒">
+            <img src="./19套表情包素材/给你礼物，惊喜.gif" alt="惊喜礼盒动态贴纸">
+            <span>惊喜礼盒</span>
+          </div>
+          <div class="object object-3" data-name="向日葵花束">
+            <img src="./19套表情包素材/给你花花.gif" alt="向日葵花束动态贴纸">
+            <span>向日葵花束</span>
+          </div>
+          <div class="object object-4" data-name="爱心抱枕">
+            <img src="./19套表情包素材/抱着爱心，很满意.gif" alt="爱心抱枕动态贴纸">
+            <span>爱心抱枕</span>
+          </div>
         </div>
-        <div id="interactionStatus" class="status">手势状态: 未检测到手势</div>
+        <div id="interactionStatus" class="status interaction-status">手势状态：未检测到手势</div>
+      </section>
+    </main>
+
+    <section class="guide panel">
+      <img class="decor guide-sticker" src="./19套表情包素材/加油、鼓劲.gif" alt="加油鼓劲动态贴纸">
+      <div class="guide-intro">
+        <span class="section-index">HOW TO PLAY</span>
+        <h2>三步开始交互</h2>
+        <p>保持光线充足，让手掌完整进入镜头。</p>
+      </div>
+      <ol class="guide-steps">
+        <li><b>01</b><div><strong>启动镜头</strong><span>允许浏览器使用摄像头</span></div></li>
+        <li><b>02</b><div><strong>组合A—Z</strong><span>单手识别A—E，双手组合扩展到Z</span></div></li>
+        <li><b>03</b><div><strong>捏合拾取</strong><span>抓取时弹出专属动图，张开即可释放</span></div></li>
+      </ol>
+    </section>
+
+    <div id="reactionPopup" class="reaction-popup" aria-live="polite" aria-hidden="true">
+      <div class="reaction-card">
+        <span class="reaction-kicker">COLLECTION UNLOCKED</span>
+        <img id="reactionImage" src="" alt="抓取物品反馈动图">
+        <strong id="reactionText">已抓取收藏品</strong>
+        <small>移动手掌可以拖动物品</small>
       </div>
     </div>
 
-    <div class="instructions">
-      <h2>使用说明</h2>
-      <ul>
-        <li>点击"启动摄像头"按钮授权摄像头使用权限</li>
-        <li>将您的手放在摄像头前，确保手部清晰可见</li>
-        <li>张开手掌移动光标到物品上方</li>
-        <li>做出抓取手势（握拳）来抓取物品</li>
-        <li>移动您的手来移动抓取的物品</li>
-        <li>再次张开手掌释放物品</li>
-      </ul>
-    </div>
+    <footer>
+      <span></span>
+      <span>TensorFlow.js / MediaPipe / Vanilla JavaScript</span>
+      <img class="footer-sticker" src="./19套表情包素材/18走路.gif" alt="行走动态贴纸">
+    </footer>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>
