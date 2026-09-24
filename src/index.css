@@ -437,6 +437,7 @@ body[data-mode='ball'] .video-gesture-ball { display: grid; }
   animation: ball-soft-grab .72s ease-in-out infinite alternate;
 }
 .gesture-ball.ball-bounce { animation: ball-elastic-hit .34s cubic-bezier(.2,.9,.3,1); }
+.gesture-ball.ball-respawn { animation: ball-respawn-in .5s cubic-bezier(.2,.8,.3,1); }
 @keyframes ball-soft-grab {
   from { transform: scale(.92, 1.07) rotate(-2deg); }
   to { transform: scale(1.07, .93) rotate(2deg); }
@@ -446,6 +447,10 @@ body[data-mode='ball'] .video-gesture-ball { display: grid; }
   34% { transform: scale(1.14, .84); }
   68% { transform: scale(.93, 1.08); }
   100% { transform: scale(1); }
+}
+@keyframes ball-respawn-in {
+  from { opacity: 0; transform: translateY(-18px) scale(.72); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 .ball-particle-layer { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
 .soft-particle {

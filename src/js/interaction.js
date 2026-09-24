@@ -157,12 +157,29 @@ function initialiseBallState(ball, index, area, force = false) {
         y: -size - index * 68,
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
         vy: 28 + index * 12,
-        lastHit: 0
+        lastHit: 0,
+        bounceCount: 0
     };
     ballStates.set(ball, state);
     ball.style.left = `${state.x}px`;
     ball.style.top = `${state.y}px`;
     return state;
+}
+
+function respawnBall(ball, state, index, area) {
+    const size = ball.offsetWidth || 80;
+    const lane = Number(ball.dataset.spawn ?? .5);
+    const randomOffset = (Math.random() - .5) * area.clientWidth * .18;
+    state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
+    state.y = -size - 24 - index * 18;
+    state.vx = (Math.random() - .5) * 86;
+    state.vy = 32 + Math.random() * 38;
+    state.bounceCount = 0;
+    state.lastHit = 0;
+    ball.classList.remove('ball-respawn');
+    void ball.offsetWidth;
+    ball.classList.add('ball-respawn');
+    window.setTimeout(() => ball.classList.remove('ball-respawn'), 520);
 }
 
 function resolveBallCollisions(balls) {
@@ -263,9 +280,15 @@ function animateVideoBalls(frameTime) {
             }
             if (state.y >= maxY) {
                 state.y = maxY;
-                state.vy = -Math.max(105, Math.abs(state.vy) * .68);
-                state.vx *= .985;
-                pulseBall(ball);
+                state.bounceCount += 1;
+                if (state.bounceCount >= 3) {
+                    // 每颗球完成若干次弹跳后回到画面顶部，形成持续循环的下落球流。
+                    respawnBall(ball, state, index, area);
+                } else {
+                    state.vy = -Math.max(105, Math.abs(state.vy) * .68);
+                    state.vx *= .985;
+                    pulseBall(ball);
+                }
             }
             ball.style.left = `${state.x}px`;
             ball.style.top = `${state.y}px`;
