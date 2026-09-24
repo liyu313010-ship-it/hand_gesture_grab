@@ -602,6 +602,31 @@ body[data-mode='ball'] .interaction-section { display: none; }
 }
 .ball-highlight { position: absolute; z-index: 2; top: 12%; left: 17%; width: 33%; height: 21%; border-radius: 50%; background: rgba(255,255,255,.72); filter: blur(2.5px); pointer-events: none; }
 .ball-shine { position: absolute; z-index: 2; top: 45%; right: 12%; width: 12%; height: 26%; border-radius: 50%; background: rgba(255,255,255,.27); filter: blur(2.5px); transform: rotate(-28deg); pointer-events: none; }
+.ball-material-tag {
+  position: absolute;
+  z-index: 3;
+  bottom: -15px;
+  left: 50%;
+  padding: 2px 5px;
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 999px;
+  background: rgba(0,0,0,.48);
+  color: #fff;
+  font-size: 8px;
+  line-height: 1;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  text-shadow: 0 1px 3px #000;
+}
+/* 数字材质的外观差异与脚本中的物理参数一一对应。 */
+.gesture-ball.material-water { animation: material-water-flow 2.2s ease-in-out infinite alternate; }
+.gesture-ball.material-gel { border-radius: 44% 56% 48% 52%; box-shadow: inset 10px 10px 24px rgba(255,255,255,.38), 0 0 26px var(--ball-glow); }
+.gesture-ball.material-glass { border-width: 2px; background-color: rgba(255,255,255,.2); filter: contrast(1.08); }
+.gesture-ball.material-fire { box-shadow: inset 0 -18px 30px rgba(255,70,20,.48), 0 0 32px #ff7038, 0 -14px 30px rgba(255,192,72,.52); animation: material-fire-pulse .7s ease-in-out infinite alternate; }
+.gesture-ball.material-magnet { outline: 2px dashed rgba(255,255,255,.72); outline-offset: 3px; }
+.gesture-ball.material-bubble { opacity: .82; border-width: 2px; box-shadow: inset 9px 8px 17px rgba(255,255,255,.46), 0 0 22px rgba(170,230,255,.72); }
+@keyframes material-water-flow { to { border-radius: 54% 46% 57% 43%; } }
+@keyframes material-fire-pulse { to { filter: brightness(1.24) saturate(1.35); } }
 .gesture-ball.grabbing {
   filter: brightness(1.18) saturate(1.15);
   box-shadow: inset -12px -14px 22px rgba(0,0,0,.26), inset 12px 9px 18px rgba(255,255,255,.32), 0 0 0 5px rgba(255,255,255,.2), 0 0 34px var(--ball-glow), 0 24px 42px rgba(0,0,0,.3);
@@ -672,14 +697,69 @@ body[data-mode='ball'] .interaction-section { display: none; }
 }
 .air-control-hud b { padding: 4px 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; background: rgba(0,0,0,.45); }
 .air-control-hud i { font-style: normal; font-size: .82rem; }
+.innovation-hud {
+  position: absolute;
+  z-index: 7;
+  top: 12px;
+  left: 12px;
+  display: none;
+  max-width: calc(100% - 90px);
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  pointer-events: none;
+}
+.innovation-hud span {
+  padding: 4px 7px;
+  border: 1px solid rgba(255,255,255,.24);
+  border-radius: 999px;
+  background: rgba(0,0,0,.44);
+  color: rgba(255,255,255,.9);
+  font-size: .5rem;
+  line-height: 1;
+  text-shadow: 0 1px 4px #000;
+  backdrop-filter: blur(5px);
+}
 body[data-mode='ball'] .air-goal { display: grid; }
 body[data-mode='ball'] .air-control-hud { display: flex; }
+body[data-mode='ball'] .innovation-hud { display: flex; }
 @keyframes goal-success {
   0% { transform: scale(1); opacity: 1; }
   45% { transform: scale(1.28); opacity: .72; box-shadow: 0 0 55px rgba(255,255,255,.9); }
   100% { transform: scale(1); opacity: 1; }
 }
 .ball-particle-layer { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+.body-collider-line,
+.energy-rope {
+  position: absolute;
+  height: 3px;
+  border-radius: 999px;
+  transform-origin: 0 50%;
+  pointer-events: none;
+}
+.body-collider-line {
+  background: linear-gradient(90deg, rgba(90,225,255,.12), rgba(255,255,255,.62), rgba(90,225,255,.12));
+  box-shadow: 0 0 9px rgba(90,225,255,.48);
+  opacity: .52;
+}
+.energy-rope {
+  height: 5px;
+  background: repeating-linear-gradient(90deg, #fff 0 8px, #77e9ff 8px 14px, #b56cff 14px 22px);
+  box-shadow: 0 0 12px #72e5ff, 0 0 22px rgba(181,108,255,.7);
+  animation: energy-rope-pulse .46s ease-in-out infinite alternate;
+}
+.gesture-path-point {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 8px #6ce5ff, 0 0 16px #a86cff;
+  transform: translate(-50%, -50%);
+  animation: gesture-path-fade 5.2s linear forwards;
+}
+@keyframes energy-rope-pulse { to { filter: brightness(1.35); transform-origin: 0 50%; } }
+@keyframes gesture-path-fade { 0%, 74% { opacity: .9; } 100% { opacity: 0; } }
 .soft-particle {
   position: absolute;
   width: var(--particle-size, 8px);
@@ -807,6 +887,8 @@ body[data-mode='ball'] .air-control-hud { display: flex; }
 .mode-guide-card {
   position: relative;
   width: min(430px, calc(100vw - 36px));
+  max-height: calc(100vh - 30px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;

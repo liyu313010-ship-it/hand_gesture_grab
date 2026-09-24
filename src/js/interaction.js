@@ -60,6 +60,21 @@ const BALL_PALETTE = [
     { tint: 'rgba(255, 146, 70, .5)', glow: 'rgba(255, 140, 60, .48)', solid: '#ff9246' }
 ];
 
+// 六种数字材质共享同一套手势，但拥有不同重力、阻尼、弹性与特殊行为。
+const BALL_MATERIALS = [
+    { id: 'water', label: '水球', gravity: .72, drag: .986, bounce: .62, merge: true },
+    { id: 'gel', label: '果冻', gravity: .82, drag: .978, bounce: .84, merge: true },
+    { id: 'glass', label: '玻璃', gravity: 1.08, drag: .995, bounce: .94, brittle: true },
+    { id: 'fire', label: '火焰', gravity: .28, drag: .991, bounce: .7, buoyant: true },
+    { id: 'magnet', label: '磁力', gravity: .74, drag: .988, bounce: .8, magnetic: true },
+    { id: 'bubble', label: '泡泡', gravity: .16, drag: .972, bounce: .9, merge: true }
+];
+const MATERIAL_CLASS_NAMES = BALL_MATERIALS.map(material => `material-${material.id}`);
+
+function materialById(id) {
+    return BALL_MATERIALS.find(material => material.id === id) || BALL_MATERIALS[0];
+}
+
 // 球体外观刷新：换上一张新素材、换一种玻璃颜色与随机大小；素材名写入 alt / title 便于识别。
 function applyBallLook(ball) {
     const asset = takeBallAsset();
@@ -81,6 +96,22 @@ function applyBallLook(ball) {
     ball.style.setProperty('--ball-tint', BALL_PALETTE[paletteIndex].tint);
     ball.style.setProperty('--ball-glow', BALL_PALETTE[paletteIndex].glow);
     ball.style.setProperty('--ball-solid', BALL_PALETTE[paletteIndex].solid);
+    const previousMaterial = ball.dataset.material;
+    let material = BALL_MATERIALS[Math.floor(Math.random() * BALL_MATERIALS.length)];
+    if (material.id === previousMaterial) {
+        material = BALL_MATERIALS[(BALL_MATERIALS.indexOf(material) + 1) % BALL_MATERIALS.length];
+    }
+    ball.classList.remove(...MATERIAL_CLASS_NAMES);
+    ball.classList.add(`material-${material.id}`);
+    ball.dataset.material = material.id;
+    ball.dataset.materialLabel = material.label;
+    let badge = ball.querySelector('.ball-material-tag');
+    if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'ball-material-tag';
+        ball.appendChild(badge);
+    }
+    badge.textContent = material.label;
 }
 
 // 指尖向上戳的判定速度（px/s，屏幕坐标向上为负），达到即触发球体爆裂。
@@ -105,9 +136,27 @@ const liveHandState = {
     vx: 0,
     vy: 0,
     points: [],
+    angle: 0,
+    angularVelocity: 0,
+    spread: 1,
+    tilt: 0,
     gesture: '未检测到手势',
     updatedAt: 0
 };
+const dualHandState = {
+    active: false,
+    left: null,
+    right: null,
+    midpoint: null,
+    distance: 0,
+    distanceVelocity: 0,
+    portalActive: false,
+    updatedAt: 0
+};
+const liveBodyState = { segments: [], updatedAt: 0 };
+let fingerPath = [];
+let lastPathParticleAt = 0;
+let pathOrbit = null;
 
 // 把物品抬到最上层，后触碰的收藏品始终显示在前面
 function bringToFront(object) {
@@ -139,6 +188,8 @@ function ballColor(ball) {
 // 记录上一次写入的 HUD 文本；物理循环每帧都会调用本函数，值未变化时跳过 DOM 写入。
 let lastHudGestureText = '';
 let lastHudScoreText = '';
+let lastFieldText = '';
+let lastMaterialText = '';
 
 function updateAirHud(gesture) {
     const gestureElement = document.getElementById('airGesture');
@@ -158,6 +209,19 @@ function updateAirHud(gesture) {
     if (scoreElement && scoreText !== lastHudScoreText) {
         scoreElement.textContent = scoreText;
         lastHudScoreText = scoreText;
+    }
+}
+
+function updateFieldHud(text, materialText) {
+    const field = document.getElementById('fieldMode');
+    const material = document.getElementById('materialMode');
+    if (field && text && text !== lastFieldText) {
+        field.textContent = `力场：${text}`;
+        lastFieldText = text;
+    }
+    if (material && materialText && materialText !== lastMaterialText) {
+        material.textContent = `材质：${materialText}`;
+        lastMaterialText = materialText;
     }
 }
 
@@ -189,6 +253,100 @@ function mapPointToArea(point, canvas, areaRect) {
         x: (point.x / canvas.width) * areaRect.width,
         y: (point.y / canvas.height) * areaRect.height
     };
+}
+
+const BODY_SEGMENT_NAMES = [
+    ['left_shoulder', 'right_shoulder'],
+    ['left_shoulder', 'left_elbow'], ['left_elbow', 'left_wrist'],
+    ['right_shoulder', 'right_elbow'], ['right_elbow', 'right_wrist'],
+    ['left_shoulder', 'left_hip'], ['right_shoulder', 'right_hip'],
+    ['left_hip', 'right_hip'],
+    ['left_hip', 'left_knee'], ['right_hip', 'right_knee']
+];
+
+function renderBodyColliders(segments) {
+    const layer = document.querySelector('.ball-particle-layer');
+    if (!layer) return;
+    let lines = [...layer.querySelectorAll('.body-collider-line')];
+    while (lines.length < segments.length) {
+        const line = document.createElement('i');
+        line.className = 'body-collider-line';
+        layer.appendChild(line);
+        lines.push(line);
+    }
+    lines.forEach((line, index) => {
+        const segment = segments[index];
+        if (!segment) {
+            line.hidden = true;
+            return;
+        }
+        line.hidden = false;
+        const dx = segment.b.x - segment.a.x;
+        const dy = segment.b.y - segment.a.y;
+        line.style.left = `${segment.a.x}px`;
+        line.style.top = `${segment.a.y}px`;
+        line.style.width = `${Math.hypot(dx, dy)}px`;
+        line.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+    });
+}
+
+function updateBodyPose(pose, canvas) {
+    if (getActiveMode() !== 'ball') return;
+    const area = document.querySelector('.video-container');
+    if (!area || !pose?.keypoints) return;
+    const rect = area.getBoundingClientRect();
+    const points = new Map();
+    pose.keypoints.forEach((point) => {
+        if ((point.score ?? 1) < .38 || !point.name) return;
+        points.set(point.name, mapPointToArea(point, canvas, rect));
+    });
+    liveBodyState.segments = BODY_SEGMENT_NAMES
+        .map(([from, to]) => points.has(from) && points.has(to) ? { a: points.get(from), b: points.get(to) } : null)
+        .filter(Boolean);
+    liveBodyState.updatedAt = performance.now();
+    renderBodyColliders(liveBodyState.segments);
+}
+
+function clearBodyPose() {
+    liveBodyState.segments = [];
+    document.querySelectorAll('.body-collider-line').forEach(line => { line.hidden = true; });
+}
+
+function closestPointOnSegment(point, a, b) {
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSquared));
+    return { x: a.x + dx * t, y: a.y + dy * t, dx, dy };
+}
+
+function applyBodyCollision(state, size, frameTime) {
+    if (frameTime - liveBodyState.updatedAt > 380) return;
+    const center = { x: state.x + size / 2, y: state.y + size / 2 };
+    const collisionDistance = size / 2 + 15;
+    for (const segment of liveBodyState.segments) {
+        const closest = closestPointOnSegment(center, segment.a, segment.b);
+        const dx = center.x - closest.x;
+        const dy = center.y - closest.y;
+        const distance = Math.hypot(dx, dy) || 1;
+        if (distance >= collisionDistance) continue;
+        const nx = dx / distance;
+        const ny = dy / distance;
+        const overlap = collisionDistance - distance;
+        state.x += nx * overlap;
+        state.y += ny * overlap;
+        const normalSpeed = state.vx * nx + state.vy * ny;
+        if (normalSpeed < 0) {
+            state.vx -= normalSpeed * 1.35 * nx;
+            state.vy -= normalSpeed * 1.35 * ny;
+        }
+        // 沿手臂或身体轮廓的坡度缓慢滚动。
+        const segmentLength = Math.hypot(closest.dx, closest.dy) || 1;
+        state.vx += closest.dx / segmentLength * 8;
+        state.vy += closest.dy / segmentLength * 8;
+        state.touched = true;
+        break;
+    }
 }
 
 function getPinchData(hand, canvas, areaRect) {
@@ -327,9 +485,69 @@ function syncLiveHand(x, y, gesture, hand, canvas, areaRect) {
     liveHandState.y = y;
     // 保存整只手的关键点碰撞轮廓。张掌拍球时不再只看一个掌心点，
     // 指尖、指节或掌边碰到球体也能立刻产生响应。
-    liveHandState.points = hand?.keypoints?.map(point => mapPointToArea(point, canvas, areaRect)) ?? [];
+    const mappedPoints = hand?.keypoints?.map(point => ({ ...mapPointToArea(point, canvas, areaRect), name: point.name })) ?? [];
+    liveHandState.points = mappedPoints;
+    const pointByName = new Map(mappedPoints.map(point => [point.name, point]));
+    const wrist = pointByName.get('wrist');
+    const middleMcp = pointByName.get('middle_finger_mcp');
+    const indexMcp = pointByName.get('index_finger_mcp');
+    const pinkyMcp = pointByName.get('pinky_finger_mcp');
+    if (wrist && middleMcp) {
+        const angle = Math.atan2(middleMcp.y - wrist.y, middleMcp.x - wrist.x);
+        let delta = angle - liveHandState.angle;
+        if (delta > Math.PI) delta -= Math.PI * 2;
+        if (delta < -Math.PI) delta += Math.PI * 2;
+        liveHandState.angularVelocity = liveHandState.angularVelocity * .45 + delta / elapsed * .55;
+        liveHandState.angle = angle;
+    }
+    if (indexMcp && pinkyMcp && wrist) {
+        const palmWidth = Math.max(18, Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y));
+        const tipNames = ['thumb_tip', 'index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip'];
+        const spreadTotal = tipNames.reduce((sum, name) => {
+            const point = pointByName.get(name);
+            return sum + (point ? Math.hypot(point.x - wrist.x, point.y - wrist.y) / palmWidth : 0);
+        }, 0);
+        liveHandState.spread = Math.max(.7, Math.min(3.2, spreadTotal / tipNames.length));
+        liveHandState.tilt = Math.atan2(pinkyMcp.y - indexMcp.y, pinkyMcp.x - indexMcp.x);
+    }
     liveHandState.gesture = gesture;
     liveHandState.updatedAt = now;
+    if (gesture === '指尖点按') {
+        const indexTip = pointByName.get('index_finger_tip');
+        if (indexTip) recordFingerPath(indexTip, now);
+    }
+}
+
+function recordFingerPath(point, now) {
+    if (now - lastPathParticleAt < 38) return;
+    lastPathParticleAt = now;
+    fingerPath.push({ x: point.x, y: point.y, at: now });
+    fingerPath = fingerPath.filter(item => now - item.at < 5200).slice(-90);
+    const layer = document.querySelector('.ball-particle-layer');
+    if (layer) {
+        const dot = document.createElement('i');
+        dot.className = 'gesture-path-point';
+        dot.style.left = `${point.x}px`;
+        dot.style.top = `${point.y}px`;
+        layer.appendChild(dot);
+        window.setTimeout(() => dot.remove(), 5200);
+    }
+    if (fingerPath.length < 24) return;
+    const recent = fingerPath.slice(-36);
+    const first = recent[0];
+    const last = recent.at(-1);
+    const xs = recent.map(item => item.x);
+    const ys = recent.map(item => item.y);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const height = Math.max(...ys) - Math.min(...ys);
+    if (Math.hypot(last.x - first.x, last.y - first.y) < 54 && width > 90 && height > 90) {
+        const center = {
+            x: recent.reduce((sum, item) => sum + item.x, 0) / recent.length,
+            y: recent.reduce((sum, item) => sum + item.y, 0) / recent.length
+        };
+        pathOrbit = { ...center, radius: (width + height) / 4, expiresAt: now + 5200 };
+        updateFieldHud('轨迹圆环 · 球体沿轨道运动');
+    }
 }
 
 function nearestLiveHandPoint(x, y, includeAllPoints = true) {
@@ -340,6 +558,72 @@ function nearestLiveHandPoint(x, y, includeAllPoints = true) {
         const distance = Math.hypot(x - point.x, y - point.y);
         return distance < nearest.distance ? { point, distance } : nearest;
     }, { point: liveHandState, distance: Infinity });
+}
+
+function handFieldMetrics(hand, canvas, areaRect) {
+    if (!hand?.keypoints?.length) return null;
+    const mapped = new Map(hand.keypoints.map(point => [point.name, mapPointToArea(point, canvas, areaRect)]));
+    const wrist = mapped.get('wrist');
+    const indexMcp = mapped.get('index_finger_mcp');
+    const middleMcp = mapped.get('middle_finger_mcp');
+    const ringMcp = mapped.get('ring_finger_mcp');
+    const pinkyMcp = mapped.get('pinky_finger_mcp');
+    if (!wrist || !indexMcp || !middleMcp || !ringMcp || !pinkyMcp) return null;
+    const palm = {
+        x: (wrist.x + indexMcp.x + middleMcp.x + ringMcp.x + pinkyMcp.x) / 5,
+        y: (wrist.y + indexMcp.y + middleMcp.y + ringMcp.y + pinkyMcp.y) / 5
+    };
+    const palmWidth = Math.max(20, Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y));
+    const tips = ['thumb_tip', 'index_finger_tip', 'middle_finger_tip', 'ring_finger_tip', 'pinky_finger_tip']
+        .map(name => mapped.get(name)).filter(Boolean);
+    const spread = tips.reduce((sum, tip) => sum + Math.hypot(tip.x - palm.x, tip.y - palm.y), 0) /
+        Math.max(1, tips.length) / palmWidth;
+    return { ...palm, spread, palmWidth };
+}
+
+function renderEnergyRope(first, second, active) {
+    const layer = document.querySelector('.ball-particle-layer');
+    if (!layer) return;
+    let rope = layer.querySelector('.energy-rope');
+    if (!rope) {
+        rope = document.createElement('i');
+        rope.className = 'energy-rope';
+        layer.appendChild(rope);
+    }
+    rope.hidden = !active;
+    if (!active) return;
+    const dx = second.x - first.x;
+    const dy = second.y - first.y;
+    rope.style.left = `${first.x}px`;
+    rope.style.top = `${first.y}px`;
+    rope.style.width = `${Math.hypot(dx, dy)}px`;
+    rope.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
+}
+
+function updateDualHandField(hands, canvas, areaRect) {
+    const metrics = (hands || []).map(hand => handFieldMetrics(hand, canvas, areaRect)).filter(Boolean);
+    if (metrics.length < 2) {
+        dualHandState.active = false;
+        dualHandState.portalActive = false;
+        renderEnergyRope(null, null, false);
+        return;
+    }
+    metrics.sort((a, b) => a.x - b.x);
+    const [left, right] = metrics;
+    const now = performance.now();
+    const distance = Math.hypot(right.x - left.x, right.y - left.y);
+    const elapsed = Math.max(.016, (now - dualHandState.updatedAt) / 1000);
+    const rawVelocity = dualHandState.updatedAt ? (distance - dualHandState.distance) / elapsed : 0;
+    dualHandState.distanceVelocity = dualHandState.distanceVelocity * .5 + rawVelocity * .5;
+    dualHandState.active = true;
+    dualHandState.left = left;
+    dualHandState.right = right;
+    dualHandState.midpoint = { x: (left.x + right.x) / 2, y: (left.y + right.y) / 2 };
+    dualHandState.distance = distance;
+    // 双手张开且保持一定距离时形成传送门；能量绳同时作为可碰撞的弹性边界。
+    dualHandState.portalActive = left.spread > 1.45 && right.spread > 1.45 && distance > 150;
+    dualHandState.updatedAt = now;
+    renderEnergyRope(left, right, true);
 }
 
 function applyImmediateHandHit() {
@@ -371,12 +655,19 @@ function applyImmediateHandHit() {
         const nx = dx / distance;
         const ny = dy / distance;
         const strength = Math.min(440, Math.max(isFingerPoke ? 105 : 155, speed * (isFingerPoke ? .52 : .7)));
+        const material = materialById(state.material || ball.dataset.material);
+        if (material.brittle && speed > 285) {
+            explodeBall(ball, state, index);
+            updateFieldHud('玻璃碎裂 · 粒子释放', material.label);
+            return;
+        }
         state.vx += nx * strength + liveHandState.vx * .5;
         state.vy += ny * strength + liveHandState.vy * .5;
         state.lastHit = now;
         state.touched = true;
         pulseBall(ball);
         createSoftParticles(ball, 'hit', isFingerPoke ? 6 : 9);
+        updateFieldHud(isFingerPoke ? '指尖弹击' : '整手拍击', material.label);
     });
 }
 
@@ -393,6 +684,10 @@ function initialiseBallState(ball, index, area, force = false) {
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
         vy: 10 + index * 5,
         size,
+        material: ball.dataset.material || 'water',
+        polarity: index % 2 ? -1 : 1,
+        portalCooldown: 0,
+        mergeCooldown: 0,
         lastHit: 0,
         lastFieldParticle: 0,
         lastTrail: 0,
@@ -416,6 +711,11 @@ function respawnBall(ball, state, index, area) {
     state.y = -size - 24 - index * 18;
     state.vx = (Math.random() - .5) * 86;
     state.vy = 10 + Math.random() * 9;
+    state.size = size;
+    state.material = ball.dataset.material || 'water';
+    state.polarity = Math.random() > .5 ? 1 : -1;
+    state.portalCooldown = 0;
+    state.mergeCooldown = performance.now() + 700;
     state.lastHit = 0;
     state.lastFieldParticle = 0;
     state.lastTrail = 0;
@@ -429,7 +729,24 @@ function respawnBall(ball, state, index, area) {
     window.setTimeout(() => ball.classList.remove('ball-respawn'), 520);
 }
 
-function resolveBallCollisions(balls) {
+function mergeBalls(first, firstState, second, secondState, area, secondIndex, frameTime) {
+    const firstSize = firstState.size || first.offsetWidth;
+    const secondSize = secondState.size || second.offsetWidth;
+    const mergedSize = Math.min(126, Math.sqrt(firstSize * firstSize + secondSize * secondSize));
+    firstState.x = (firstState.x + secondState.x) / 2;
+    firstState.y = (firstState.y + secondState.y) / 2;
+    firstState.vx = (firstState.vx + secondState.vx) / 2;
+    firstState.vy = (firstState.vy + secondState.vy) / 2;
+    firstState.size = mergedSize;
+    firstState.mergeCooldown = frameTime + 1500;
+    first.style.setProperty('--ball-size', `${mergedSize}px`);
+    pulseBall(first);
+    createSoftParticles(first, 'grab', 20);
+    updateFieldHud('同材质融合 · 体积增长', materialById(firstState.material).label);
+    respawnBall(second, secondState, secondIndex, area);
+}
+
+function resolveBallCollisions(balls, area, frameTime) {
     for (let firstIndex = 0; firstIndex < balls.length; firstIndex += 1) {
         const first = balls[firstIndex];
         if (first.classList.contains('grabbing') || first.classList.contains('exploding')) continue;
@@ -447,6 +764,17 @@ function resolveBallCollisions(balls) {
             const minimumDistance = firstRadius + secondRadius;
             if (distance >= minimumDistance) continue;
 
+            const relativeSpeed = Math.hypot(secondState.vx - firstState.vx, secondState.vy - firstState.vy);
+            const firstMaterial = materialById(firstState.material);
+            const canMerge = firstState.material === secondState.material && firstMaterial.merge &&
+                (firstState.touched || secondState.touched) && relativeSpeed < 72 &&
+                frameTime > (firstState.mergeCooldown || 0) && frameTime > (secondState.mergeCooldown || 0) &&
+                firstRadius + secondRadius < 118;
+            if (canMerge) {
+                mergeBalls(first, firstState, second, secondState, area, secondIndex, frameTime);
+                continue;
+            }
+
             const nx = dx / distance;
             const ny = dy / distance;
             const overlap = minimumDistance - distance;
@@ -456,7 +784,8 @@ function resolveBallCollisions(balls) {
             secondState.y += ny * overlap / 2;
             const relativeVelocity = (secondState.vx - firstState.vx) * nx + (secondState.vy - firstState.vy) * ny;
             if (relativeVelocity < 0) {
-                const impulse = -relativeVelocity * .88;
+                const bounce = (materialById(firstState.material).bounce + materialById(secondState.material).bounce) / 2;
+                const impulse = -relativeVelocity * bounce;
                 firstState.vx -= impulse * nx;
                 firstState.vy -= impulse * ny;
                 secondState.vx += impulse * nx;
@@ -529,6 +858,156 @@ function checkAirGoal(ball, state, index, area, frameTime) {
     return true;
 }
 
+function applyMagneticForces(balls, elapsed) {
+    for (let firstIndex = 0; firstIndex < balls.length; firstIndex += 1) {
+        const first = balls[firstIndex];
+        const firstState = ballStates.get(first);
+        if (!firstState || first.classList.contains('grabbing')) continue;
+        for (let secondIndex = firstIndex + 1; secondIndex < balls.length; secondIndex += 1) {
+            const second = balls[secondIndex];
+            const secondState = ballStates.get(second);
+            if (!secondState || second.classList.contains('grabbing')) continue;
+            if (firstState.material !== 'magnet' && secondState.material !== 'magnet') continue;
+            const firstSize = firstState.size || first.offsetWidth;
+            const secondSize = secondState.size || second.offsetWidth;
+            const dx = secondState.x + secondSize / 2 - firstState.x - firstSize / 2;
+            const dy = secondState.y + secondSize / 2 - firstState.y - firstSize / 2;
+            const distance = Math.hypot(dx, dy) || 1;
+            if (distance > 260) continue;
+            const samePolarity = firstState.material === 'magnet' && secondState.material === 'magnet' &&
+                firstState.polarity === secondState.polarity;
+            const direction = samePolarity ? -1 : 1;
+            const force = direction * 260 * (1 - distance / 260);
+            const impulseX = dx / distance * force * elapsed;
+            const impulseY = dy / distance * force * elapsed;
+            firstState.vx += impulseX;
+            firstState.vy += impulseY;
+            secondState.vx -= impulseX;
+            secondState.vy -= impulseY;
+        }
+    }
+}
+
+function applyEnergyRopeCollision(state, size) {
+    if (!dualHandState.active || !dualHandState.left || !dualHandState.right) return;
+    const center = { x: state.x + size / 2, y: state.y + size / 2 };
+    const closest = closestPointOnSegment(center, dualHandState.left, dualHandState.right);
+    const dx = center.x - closest.x;
+    const dy = center.y - closest.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const limit = size / 2 + 9;
+    if (distance >= limit) return;
+    const nx = dx / distance;
+    const ny = dy / distance;
+    state.x += nx * (limit - distance);
+    state.y += ny * (limit - distance);
+    const normalSpeed = state.vx * nx + state.vy * ny;
+    if (normalSpeed < 0) {
+        state.vx -= normalSpeed * 1.7 * nx;
+        state.vy -= normalSpeed * 1.7 * ny;
+    }
+    state.touched = true;
+}
+
+function applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area) {
+    if (!dualHandState.active || frameTime - dualHandState.updatedAt > 300) return;
+    const centerX = state.x + size / 2;
+    const centerY = state.y + size / 2;
+    const midpoint = dualHandState.midpoint;
+    const dx = centerX - midpoint.x;
+    const dy = centerY - midpoint.y;
+    const distance = Math.hypot(dx, dy) || 1;
+
+    // 双手距离连续变化控制整个球群压缩/膨胀，不需要切换模式或点击按钮。
+    if (Math.abs(dualHandState.distanceVelocity) > 28 && distance < Math.max(260, dualHandState.distance * .95)) {
+        const force = Math.max(-480, Math.min(480, dualHandState.distanceVelocity * .72));
+        state.vx += dx / distance * force * elapsed;
+        state.vy += dy / distance * force * elapsed;
+        state.touched = true;
+        updateFieldHud(force > 0 ? '双手展开 · 球群膨胀' : '双手靠近 · 球群压缩');
+    }
+
+    if (dualHandState.portalActive && frameTime > (state.portalCooldown || 0)) {
+        const leftDistance = Math.hypot(centerX - dualHandState.left.x, centerY - dualHandState.left.y);
+        const rightDistance = Math.hypot(centerX - dualHandState.right.x, centerY - dualHandState.right.y);
+        const portalRadius = Math.max(42, size * .72);
+        let destination = null;
+        if (leftDistance < portalRadius) destination = dualHandState.right;
+        else if (rightDistance < portalRadius) destination = dualHandState.left;
+        if (destination) {
+            state.x = Math.max(0, Math.min(area.clientWidth - size, destination.x - size / 2));
+            state.y = Math.max(0, Math.min(area.clientHeight - size, destination.y - size / 2));
+            state.portalCooldown = frameTime + 900;
+            state.touched = true;
+            createSoftParticles(ball, 'hit', 16);
+            updateFieldHud('双手传送门 · 瞬移');
+        }
+    }
+    applyEnergyRopeCollision(state, size);
+}
+
+function applyGestureFields(state, size, elapsed, frameTime) {
+    if (!liveHandState.active || frameTime - liveHandState.updatedAt > 260) return;
+    const centerX = state.x + size / 2;
+    const centerY = state.y + size / 2;
+    const dx = centerX - liveHandState.x;
+    const dy = centerY - liveHandState.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    const handSpeed = Math.hypot(liveHandState.vx, liveHandState.vy);
+    const fieldRadius = 150 + liveHandState.spread * 72;
+
+    // 手掌旋转速度直接生成切向涡流；旋转越快，轨道速度越高。
+    if (liveHandState.gesture === '张开手势' && Math.abs(liveHandState.angularVelocity) > .72 && distance < fieldRadius) {
+        const strength = Math.max(-520, Math.min(520, liveHandState.angularVelocity * 135)) * (1 - distance / fieldRadius);
+        state.vx += -dy / distance * strength * elapsed;
+        state.vy += dx / distance * strength * elapsed;
+        state.touched = true;
+        updateFieldHud('旋转手掌 · 涡流');
+    }
+
+    // 缓慢移动时形成黏性跟随，手掌倾斜则给球一个连续的横向滚动力。
+    if (liveHandState.gesture === '张开手势' && distance < 150 && handSpeed < 105) {
+        state.vx += (liveHandState.x - centerX) * elapsed * 1.7;
+        state.vy += (liveHandState.y - centerY) * elapsed * 1.7;
+        state.vx += Math.cos(liveHandState.tilt) * 22 * elapsed;
+        updateFieldHud('慢手黏附 · 倾斜滚动');
+    }
+
+    const now = performance.now();
+    fingerPath = fingerPath.filter(point => now - point.at < 5200);
+    if (fingerPath.length > 2) {
+        let nearestIndex = -1;
+        let nearestDistance = 105;
+        fingerPath.forEach((point, index) => {
+            const pointDistance = Math.hypot(centerX - point.x, centerY - point.y);
+            if (pointDistance < nearestDistance) {
+                nearestDistance = pointDistance;
+                nearestIndex = index;
+            }
+        });
+        if (nearestIndex >= 0) {
+            const target = fingerPath[Math.min(fingerPath.length - 1, nearestIndex + 3)];
+            state.vx += (target.x - centerX) * elapsed * 3.2;
+            state.vy += (target.y - centerY) * elapsed * 3.2;
+            state.touched = true;
+        }
+    }
+    if (pathOrbit && frameTime < pathOrbit.expiresAt) {
+        const orbitDx = centerX - pathOrbit.x;
+        const orbitDy = centerY - pathOrbit.y;
+        const orbitDistance = Math.hypot(orbitDx, orbitDy) || 1;
+        if (Math.abs(orbitDistance - pathOrbit.radius) < 120) {
+            const radial = (pathOrbit.radius - orbitDistance) * 2.4;
+            state.vx += orbitDx / orbitDistance * radial * elapsed;
+            state.vy += orbitDy / orbitDistance * radial * elapsed;
+            state.vx += -orbitDy / orbitDistance * 95 * elapsed;
+            state.vy += orbitDx / orbitDistance * 95 * elapsed;
+        }
+    } else if (pathOrbit) {
+        pathOrbit = null;
+    }
+}
+
 function animateVideoBalls(frameTime) {
     const elapsed = Math.min((frameTime - previousFrameTime) / 1000 || .016, .034);
     previousFrameTime = frameTime;
@@ -541,10 +1020,14 @@ function animateVideoBalls(frameTime) {
         // 允许约四分之一秒的短暂漏帧，避免关键点偶尔丢失时托举、吸引或抓取反馈瞬间中断。
         const handIsLive = liveHandState.active && frameTime - liveHandState.updatedAt < 260;
         if (!handIsLive) updateAirHud('等待手势');
+        balls.forEach((ball, index) => initialiseBallState(ball, index, area));
+        applyMagneticForces(balls, elapsed);
         balls.forEach((ball, index) => {
             const state = initialiseBallState(ball, index, area);
             const size = ball.offsetWidth;
             if (size) state.size = size;
+            state.material = ball.dataset.material || state.material || 'water';
+            const material = materialById(state.material);
             if (ball.classList.contains('grabbing')) {
                 state.x = ball.offsetLeft;
                 state.y = ball.offsetTop;
@@ -558,7 +1041,19 @@ function animateVideoBalls(frameTime) {
             if (ball.classList.contains('exploding')) return;
 
             // 较缓的重力和终端速度，为摄像头手势托举、拍击与抓取留出反应时间。
-            state.vy = Math.min(state.vy + 95 * elapsed, 110);
+            const gravity = 95 * material.gravity;
+            state.vy = Math.min(state.vy + gravity * elapsed, material.id === 'bubble' ? 54 : 125);
+            const drag = Math.pow(material.drag, elapsed * 60);
+            state.vx *= drag;
+            state.vy *= drag;
+            if (material.buoyant) {
+                state.vy -= 16 * elapsed;
+                state.vx += Math.sin(frameTime / 280 + index) * 10 * elapsed;
+            }
+
+            applyGestureFields(state, size, elapsed, frameTime);
+            applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area);
+            applyBodyCollision(state, size, frameTime);
 
             if (handIsLive && liveHandState.gesture === '握拳吸引') {
                 const ballX = state.x + size / 2;
@@ -566,7 +1061,7 @@ function animateVideoBalls(frameTime) {
                 const dx = liveHandState.x - ballX;
                 const dy = liveHandState.y - ballY;
                 const distance = Math.hypot(dx, dy) || 1;
-                const fieldRadius = Math.max(240, area.clientWidth * .48);
+                const fieldRadius = Math.max(210, Math.min(area.clientWidth * .7, 170 + liveHandState.spread * 96));
                 if (distance < fieldRadius) {
                     // 引力场同时消减球原有惯性，保证高速抛出的球也能被稳定拉回掌心。
                     state.vx *= .92;
@@ -575,6 +1070,7 @@ function animateVideoBalls(frameTime) {
                     state.vx += (dx / distance) * force * elapsed;
                     state.vy += (dy / distance) * force * elapsed;
                     state.touched = true;
+                    updateFieldHud(`握拳引力 · 范围 ${Math.round(fieldRadius)}px`);
                     if (frameTime - state.lastFieldParticle > 360 && distance < fieldRadius * .75) {
                         createSoftParticles(ball, 'grab', 5);
                         state.lastFieldParticle = frameTime;
@@ -599,6 +1095,7 @@ function animateVideoBalls(frameTime) {
                     state.vy = Math.min(liveHandState.vy * .72, 18);
                     state.vx += liveHandState.vx * elapsed * 1.8;
                     state.touched = true;
+                    updateFieldHud('张掌托举 · 慢速黏附', material.label);
                 } else if (distance < size / 2 + 54 && frameTime - state.lastHit > 115) {
                     // 快速扫过球体视作拍击，手速越快，球获得的弹性冲量越大。
                     const nx = dx / distance;
@@ -609,6 +1106,16 @@ function animateVideoBalls(frameTime) {
                     state.lastHit = frameTime;
                     pulseBall(ball);
                     createSoftParticles(ball, 'hit', 9);
+                } else {
+                    // 静止张掌也会形成连续斥力；五指张得越开，作用范围越大。
+                    const repelRadius = size / 2 + 48 + liveHandState.spread * 28;
+                    if (distance < repelRadius) {
+                        const force = 120 * (1 - distance / repelRadius);
+                        state.vx += dx / distance * force * elapsed;
+                        state.vy += dy / distance * force * elapsed;
+                        state.touched = true;
+                        updateFieldHud(`张掌斥力 · 强度 ${Math.round(liveHandState.spread * 32)}%`, material.label);
+                    }
                 }
             } else if (handIsLive && liveHandState.gesture === '指尖点按') {
                 const ballX = state.x + size / 2;
@@ -644,7 +1151,7 @@ function animateVideoBalls(frameTime) {
             const maxX = Math.max(0, area.clientWidth - size);
             if (state.x <= 0 || state.x >= maxX) {
                 state.x = Math.max(0, Math.min(state.x, maxX));
-                state.vx *= -.76;
+                state.vx *= -material.bounce;
                 // 球被压在画面边缘时每隔一段时间才脉冲一次，避免每帧重启动画造成闪烁。
                 if (frameTime - state.lastWallHit > 260) {
                     pulseBall(ball);
@@ -659,7 +1166,7 @@ function animateVideoBalls(frameTime) {
             ball.style.top = `${state.y}px`;
         });
 
-        resolveBallCollisions(balls);
+        resolveBallCollisions(balls, area, frameTime);
         settleBallStack(balls);
         balls.forEach((ball) => {
             if (ball.classList.contains('grabbing') || ball.classList.contains('exploding')) return;
@@ -702,6 +1209,42 @@ function nearestBallTo(x, y, maximumDistance = 110) {
     return nearest;
 }
 
+function splitBall(ball) {
+    const area = ball.closest('.video-container');
+    const state = ballStates.get(ball);
+    const currentBalls = [...document.querySelectorAll('.video-gesture-ball')];
+    if (!area || !state || currentBalls.length >= 12 || (state.size || ball.offsetWidth) < 52) return;
+    const originalSize = state.size || ball.offsetWidth;
+    const childSize = Math.max(42, originalSize * .72);
+    const clone = ball.cloneNode(true);
+    clone.classList.remove('grabbing', 'two-hand-stretch', 'ball-bounce', 'exploding', 'ball-explode');
+    clone.style.setProperty('--ball-size', `${childSize}px`);
+    clone.style.removeProperty('--stretch-scale-x');
+    clone.style.removeProperty('--stretch-scale-y');
+    clone.style.removeProperty('--stretch-angle');
+    area.insertBefore(clone, area.querySelector('.air-goal'));
+    ball.style.setProperty('--ball-size', `${childSize}px`);
+    state.size = childSize;
+    state.x = Math.max(0, state.x - childSize * .42);
+    state.vx = -145;
+    state.vy = -45;
+    state.mergeCooldown = performance.now() + 1700;
+    const cloneState = {
+        ...state,
+        x: Math.min(area.clientWidth - childSize, state.x + childSize * 1.25),
+        vx: 145,
+        vy: -45,
+        lastHit: 0,
+        mergeCooldown: performance.now() + 1700,
+        portalCooldown: 0
+    };
+    ballStates.set(clone, cloneState);
+    clone.style.left = `${cloneState.x}px`;
+    clone.style.top = `${cloneState.y}px`;
+    createSoftParticles(ball, 'hit', 26);
+    updateFieldHud('双手拉裂 · 一球分为两球', materialById(state.material).label);
+}
+
 function finishTwoHandStretch() {
     if (!twoHandStretch) return;
     const ball = twoHandStretch.ball;
@@ -710,6 +1253,7 @@ function finishTwoHandStretch() {
     ball.style.removeProperty('--stretch-scale-y');
     ball.style.removeProperty('--stretch-angle');
     createSoftParticles(ball, 'release', 18);
+    if (twoHandStretch.peakStretch > 1.52) splitBall(ball);
     if (grabbedObject === ball) grabbedObject = null;
     twoHandStretch = null;
 }
@@ -738,12 +1282,14 @@ function updateTwoHandStretch(hands, canvas, area) {
         createSoftParticles(ball, 'grab', 18);
         twoHandStretch = {
             ball,
-            initialDistance: Math.max(distance, 70)
+            initialDistance: Math.max(distance, 70),
+            peakStretch: 1
         };
     }
 
     const ball = twoHandStretch.ball;
     const stretch = Math.max(.72, Math.min(1.75, distance / twoHandStretch.initialDistance));
+    twoHandStretch.peakStretch = Math.max(twoHandStretch.peakStretch, stretch);
     const angle = Math.atan2(second.y - first.y, second.x - first.x) * 180 / Math.PI;
     ball.style.setProperty('--stretch-scale-x', stretch.toFixed(3));
     ball.style.setProperty('--stretch-scale-y', Math.max(.72, 1 / Math.sqrt(stretch)).toFixed(3));
@@ -791,6 +1337,7 @@ function updateInteraction(hand, canvas, currentGesture, handPosition, allHands 
 
     if (activeMode === 'ball') {
         syncLiveHand(mappedX, mappedY, currentGesture, hand, canvas, rect);
+        updateDualHandField(allHands, canvas, rect);
         applyImmediateHandHit();
         updateAirHud(currentGesture);
     } else {
@@ -1089,10 +1636,16 @@ function resetInteraction() {
     endPointerDrag();
     removeCursor();
     liveHandState.active = false;
+    dualHandState.active = false;
+    dualHandState.portalActive = false;
+    fingerPath = [];
+    pathOrbit = null;
+    clearBodyPose();
+    renderEnergyRope(null, null, false);
     if (reactionTimer) clearTimeout(reactionTimer);
     const popup = document.getElementById('reactionPopup');
     popup?.classList.remove('show');
     popup?.setAttribute('aria-hidden', 'true');
 }
 
-export { updateInteraction, resetInteraction, resetVideoBalls, grabbedObject };
+export { updateInteraction, updateBodyPose, clearBodyPose, resetInteraction, resetVideoBalls, grabbedObject };

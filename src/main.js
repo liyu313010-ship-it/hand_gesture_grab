@@ -54,12 +54,15 @@ const MODE_CONFIG = {
     status: '球体抓取模式',
     guide: {
       kicker: 'GRAB THE BALL',
-      intro: '全屏接球：彩色素材球从空中不断飘落，用手去接住它们。',
+      intro: '数字生命场：保留抓取与托举，并加入力场、材质、融合、身体碰撞和轨迹绘制。',
       steps: [
-        { title: '托举与拍击', detail: '张掌托住球，或快速拍击让球弹起来' },
-        { title: '指尖戳爆', detail: '指尖快速向上戳中球体，炸出彩色粒子' },
-        { title: '捏合抓取', detail: '捏合抓住球体拖动位置，双手拉开可拉伸变形' },
-        { title: '空中得分', detail: '把球送进画面中的「目标」区域即可得分' }
+        { title: '原有交互', detail: '张掌托举或拍击，捏合抓取，握拳吸引，投入目标计分' },
+        { title: '连续力场', detail: '张掌斥力、握拳引力、旋转手掌形成涡流，手指张幅控制范围' },
+        { title: '双手空间', detail: '双手靠近或展开压缩/膨胀球群，两掌之间形成传送门和能量绳' },
+        { title: '六种材质', detail: '水、果冻、玻璃、火焰、磁力和泡泡拥有不同重力、弹性与特殊反应' },
+        { title: '融合与分裂', detail: '低速相碰的同材质球会融合，双手捏合拉开可把大球分裂' },
+        { title: '身体场景', detail: '球可与肩、手臂、身体和腿部轮廓碰撞并沿轮廓滚动' },
+        { title: '指尖绘轨', detail: '单独伸出食指画路径；闭合成圆后，附近球体会沿圆环运动' }
       ]
     }
   }
@@ -197,7 +200,8 @@ async function toggleCamera() {
   } else {
     // 启动摄像头
     try {
-      await voice.synthesizeSpeechSentenceBySentence("摄像头启动中")
+      // 播报与摄像头启动并行，避免部分浏览器的语音事件不返回时阻塞摄像头。
+      voice.synthesizeSpeechSentenceBySentence("摄像头启动中")
       await setupCamera(video, canvas, document.body.dataset.mode);
       setCameraButtonState(true);
       updateStatus('摄像头启动中...');

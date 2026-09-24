@@ -4,6 +4,7 @@ import { updateInteraction } from './interaction.js';
 import { recognizeAlphabet, fingerCountToLetter, countExtendedFingers } from './gesture-recognition.js';
 import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
 import { initSpeechSynthesis } from './voice.js';
+import { updateBodyTracking } from './body-tracking.js';
 
 let detector;
 let currentGesture = '未检测到手势';
@@ -81,6 +82,7 @@ function detectHands(video, canvas, detector) {
     try {
       // 检测手部 水平翻转检测结果
       const hands = await detector.estimateHands(video, { flipHorizontal: true });
+      updateBodyTracking(video, canvas);
       // 清除画布
       clearCanvas(ctx, canvas);
 
