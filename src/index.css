@@ -12,26 +12,27 @@
   --blue: #71a7ff;
 }
 
-/* 球体模式优先保证完整摄像头视野：按16:9可视区居中，不再用超宽容器裁掉画面上下部分。 */
+/* 球体模式使用手机式竖屏画面，让人物和双手拥有更充足的纵向活动空间。 */
 body[data-mode='ball'] .workspace {
-  width: min(1200px, 100%);
+  width: min(600px, 100%);
   margin-inline: auto;
 }
 body[data-mode='ball'] .camera-section .video-container {
   /* 常规高度下预留标题、状态条和页脚空间，保证视频与操作区都在一屏内。 */
-  width: min(100%, calc((100vh - 375px) * 16 / 9), 1120px);
+  width: min(100%, calc((100vh - 375px) * 9 / 16), 380px);
   height: auto;
   min-height: 280px;
   max-height: none;
-  aspect-ratio: 16 / 9;
-  /* 不允许 flex 单独压扁高度，否则 16:9 容器会退化成超宽条并再次裁掉手部。 */
+  aspect-ratio: 9 / 16;
+  /* 不允许 flex 单独压扁高度，否则竖屏容器会退化成横向画面。 */
   flex: 0 0 auto;
   align-self: center;
   margin-top: 10px;
 }
 body[data-mode='ball'] .video-container video,
 body[data-mode='ball'] .video-container canvas {
-  object-fit: contain;
+  /* 竖框只裁去横屏设备多余的左右区域，保留人物完整的上下方向。 */
+  object-fit: cover;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1064,9 +1065,9 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
   .panel-sticker { top: -18px; width: 42px; height: 42px; }
 
   .video-container { height: clamp(270px, 36vh, 320px); border-radius: 13px; }
-  /* 此断点已经压缩了页头，所以可把省下来的高度继续交给完整的 16:9 摄像画面。 */
+  /* 此断点已经压缩了页头，所以可把省下来的高度继续交给完整的 9:16 摄像画面。 */
   body[data-mode='ball'] .camera-section .video-container {
-    width: min(100%, calc((100vh - 285px) * 16 / 9), 1120px);
+    width: min(100%, calc((100vh - 285px) * 9 / 16), 380px);
   }
   /* 低窗口高度下压缩字母卡片与间距，给识别组件留出空间。 */
   .letter-mode-layer.active { gap: 6px; padding: 34px 14px; }

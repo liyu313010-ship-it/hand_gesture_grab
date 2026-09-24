@@ -163,18 +163,20 @@ function updateAirHud(gesture) {
 
 function mapPointToArea(point, canvas, areaRect) {
     if (getActiveMode() === 'ball' && canvas.width && canvas.height) {
-        // 球体模式使用 object-fit: contain 展示完整摄像头画面；将关键点映射到实际媒体内容区，
-        // 把左右或上下黑边排除，保证画面中的手和虚拟光标严格重合。
+        // 球体竖屏使用 object-fit: cover：横屏摄像头只裁左右两侧，竖向人物画面保持完整。
+        // 这里复现 cover 的缩放与负偏移，保证裁切后画面里的手和虚拟光标仍严格重合。
         const mediaAspect = canvas.width / canvas.height;
         const areaAspect = areaRect.width / areaRect.height;
-        let drawWidth = areaRect.width;
-        let drawHeight = areaRect.height;
+        let drawWidth;
+        let drawHeight;
         let offsetX = 0;
         let offsetY = 0;
-        if (areaAspect > mediaAspect) {
-            drawWidth = areaRect.height * mediaAspect;
+        if (mediaAspect > areaAspect) {
+            drawHeight = areaRect.height;
+            drawWidth = drawHeight * mediaAspect;
             offsetX = (areaRect.width - drawWidth) / 2;
         } else {
+            drawWidth = areaRect.width;
             drawHeight = areaRect.width / mediaAspect;
             offsetY = (areaRect.height - drawHeight) / 2;
         }

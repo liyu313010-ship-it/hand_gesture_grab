@@ -1,4 +1,4 @@
-import { setupCamera, stopCamera, isCameraOn } from './js/camera.js';
+import { setupCamera, updateCameraMode, stopCamera, isCameraOn } from './js/camera.js';
 import { initDetector, detectHands, stopDetection } from './js/detector.js';
 import { resetInteraction, resetVideoBalls } from './js/interaction.js';
 import { updateStatus, updateInteractionStatus } from './js/utils.js';
@@ -93,6 +93,12 @@ function setMode(mode) {
   if (stageHint) stageHint.textContent = config.stageHint;
   updateInteractionStatus(config.status);
   if (selectedMode === 'ball') resetVideoBalls();
+  if (isCameraOn && video && canvas) {
+    updateCameraMode(video, canvas, selectedMode).catch((error) => {
+      // 某些电脑摄像头不提供竖屏输出，保留设备当前画面即可，CSS仍以竖框完整显示。
+      console.warn('摄像头比例切换失败，继续使用设备默认比例:', error);
+    });
+  }
 }
 
 // 点击功能按钮时弹出交互说明弹窗；点 ✕ 关闭后即可继续交互。
@@ -192,7 +198,7 @@ async function toggleCamera() {
     // 启动摄像头
     try {
       await voice.synthesizeSpeechSentenceBySentence("摄像头启动中")
-      await setupCamera(video, canvas);
+      await setupCamera(video, canvas, document.body.dataset.mode);
       setCameraButtonState(true);
       updateStatus('摄像头启动中...');
 
