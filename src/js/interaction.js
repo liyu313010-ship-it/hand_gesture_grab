@@ -104,6 +104,7 @@ const liveHandState = {
     y: 0,
     vx: 0,
     vy: 0,
+    points: [],
     gesture: '未检测到手势',
     updatedAt: 0
 };
@@ -195,11 +196,20 @@ function getPinchData(hand, canvas, areaRect) {
     const thumbPoint = mapPointToArea(thumb, canvas, areaRect);
     const indexPoint = mapPointToArea(index, canvas, areaRect);
     const distance = Math.hypot(thumbPoint.x - indexPoint.x, thumbPoint.y - indexPoint.y);
+    const indexMcp = hand.keypoints.find(point => point.name === 'index_finger_mcp');
+    const pinkyMcp = hand.keypoints.find(point => point.name === 'pinky_finger_mcp');
+    const mappedIndexMcp = indexMcp ? mapPointToArea(indexMcp, canvas, areaRect) : null;
+    const mappedPinkyMcp = pinkyMcp ? mapPointToArea(pinkyMcp, canvas, areaRect) : null;
+    const palmWidth = mappedIndexMcp && mappedPinkyMcp
+        ? Math.hypot(mappedIndexMcp.x - mappedPinkyMcp.x, mappedIndexMcp.y - mappedPinkyMcp.y)
+        : 70;
+    const pinchThreshold = Math.max(34, Math.min(76, palmWidth * .72));
     return {
         x: (thumbPoint.x + indexPoint.x) / 2,
         y: (thumbPoint.y + indexPoint.y) / 2,
         distance,
-        pinching: distance < 46
+        pinchThreshold,
+        pinching: distance < pinchThreshold
     };
 }
 
@@ -299,11 +309,11 @@ function explodeBall(ball, state, index) {
     }, 440);
 }
 
-function syncLiveHand(x, y, gesture) {
+function syncLiveHand(x, y, gesture, hand, canvas, areaRect) {
     const now = performance.now();
     const elapsed = Math.max((now - liveHandState.updatedAt) / 1000, .016);
     if (liveHandState.updatedAt > 0 && elapsed < .18) {
-        const smoothing = .42;
+        const smoothing = .62;
         liveHandState.vx = liveHandState.vx * (1 - smoothing) + ((x - liveHandState.x) / elapsed) * smoothing;
         liveHandState.vy = liveHandState.vy * (1 - smoothing) + ((y - liveHandState.y) / elapsed) * smoothing;
     } else {
@@ -313,15 +323,28 @@ function syncLiveHand(x, y, gesture) {
     liveHandState.active = true;
     liveHandState.x = x;
     liveHandState.y = y;
+    // 保存整只手的关键点碰撞轮廓。张掌拍球时不再只看一个掌心点，
+    // 指尖、指节或掌边碰到球体也能立刻产生响应。
+    liveHandState.points = hand?.keypoints?.map(point => mapPointToArea(point, canvas, areaRect)) ?? [];
     liveHandState.gesture = gesture;
     liveHandState.updatedAt = now;
+}
+
+function nearestLiveHandPoint(x, y, includeAllPoints = true) {
+    const candidates = includeAllPoints && liveHandState.points.length
+        ? liveHandState.points
+        : [liveHandState];
+    return candidates.reduce((nearest, point) => {
+        const distance = Math.hypot(x - point.x, y - point.y);
+        return distance < nearest.distance ? { point, distance } : nearest;
+    }, { point: liveHandState, distance: Infinity });
 }
 
 function applyImmediateHandHit() {
     const isFingerPoke = liveHandState.gesture === '指尖点按';
     if (liveHandState.gesture !== '张开手势' && !isFingerPoke) return;
     const speed = Math.hypot(liveHandState.vx, liveHandState.vy);
-    if (speed < (isFingerPoke ? 45 : 180)) return;
+    if (speed < (isFingerPoke ? 24 : 75)) return;
     const now = performance.now();
     [...document.querySelectorAll('.video-gesture-ball')].forEach((ball, index) => {
         if (ball.classList.contains('grabbing') || ball.classList.contains('exploding')) return;
@@ -329,10 +352,13 @@ function applyImmediateHandHit() {
         if (!state || now - state.lastHit < 160) return;
         const radius = ball.offsetWidth / 2;
         // 使用当前绘制位置做命中检测，避免物理状态与像素取整产生偏差。
-        const dx = ball.offsetLeft + radius - liveHandState.x;
-        const dy = ball.offsetTop + radius - liveHandState.y;
-        const distance = Math.hypot(dx, dy) || 1;
-        if (distance > radius + (isFingerPoke ? 34 : 72)) return;
+        const ballX = ball.offsetLeft + radius;
+        const ballY = ball.offsetTop + radius;
+        const contact = nearestLiveHandPoint(ballX, ballY, !isFingerPoke);
+        const dx = ballX - contact.point.x;
+        const dy = ballY - contact.point.y;
+        const distance = contact.distance || 1;
+        if (distance > radius + (isFingerPoke ? 40 : 48)) return;
 
         // 指尖朝上快速戳中球体：触发爆裂，不再走弹开分支。
         if (isFingerPoke && liveHandState.vy <= -EXPLODE_UPWARD_SPEED) {
@@ -510,7 +536,8 @@ function animateVideoBalls(frameTime) {
     const active = getActiveMode() === 'ball' && area && isCameraOn;
 
     if (active) {
-        const handIsLive = liveHandState.active && frameTime - liveHandState.updatedAt < 180;
+        // 允许约四分之一秒的短暂漏帧，避免关键点偶尔丢失时托举、吸引或抓取反馈瞬间中断。
+        const handIsLive = liveHandState.active && frameTime - liveHandState.updatedAt < 260;
         if (!handIsLive) updateAirHud('等待手势');
         balls.forEach((ball, index) => {
             const state = initialiseBallState(ball, index, area);
@@ -554,22 +581,23 @@ function animateVideoBalls(frameTime) {
             } else if (handIsLive && liveHandState.gesture === '张开手势') {
                 const ballX = state.x + size / 2;
                 const ballY = state.y + size / 2;
-                const dx = ballX - liveHandState.x;
-                const dy = ballY - liveHandState.y;
-                const distance = Math.hypot(dx, dy) || 1;
+                const contact = nearestLiveHandPoint(ballX, ballY, true);
+                const dx = ballX - contact.point.x;
+                const dy = ballY - contact.point.y;
+                const distance = contact.distance || 1;
                 const handSpeed = Math.hypot(liveHandState.vx, liveHandState.vy);
                 const palmSurface = liveHandState.y - 8;
                 const ballBottom = state.y + size;
                 // 平放的手掌形成一块有宽度的托举面：掌心范围内的球落到掌面即被托住，
                 // 配合 settleBallStack 的球体堆叠，多颗球可以由低到高叠在掌上。
-                const inPalmColumn = Math.abs(dx) < 128 + size * .25;
-                const sinkingIntoPalm = ballBottom > palmSurface && ballBottom < palmSurface + 96;
-                if (handSpeed < 420 && inPalmColumn && sinkingIntoPalm) {
+                const inPalmColumn = Math.abs(ballX - liveHandState.x) < 156 + size * .3;
+                const sinkingIntoPalm = ballBottom > palmSurface - 10 && ballBottom < palmSurface + 124;
+                if (handSpeed < 480 && inPalmColumn && sinkingIntoPalm) {
                     state.y = palmSurface - size;
                     state.vy = Math.min(liveHandState.vy * .72, 18);
                     state.vx += liveHandState.vx * elapsed * 1.8;
                     state.touched = true;
-                } else if (distance < size / 2 + 42 && frameTime - state.lastHit > 150) {
+                } else if (distance < size / 2 + 54 && frameTime - state.lastHit > 115) {
                     // 快速扫过球体视作拍击，手速越快，球获得的弹性冲量越大。
                     const nx = dx / distance;
                     const ny = dy / distance;
@@ -729,7 +757,7 @@ function updateGrabDeformation(hand, canvas, area) {
     if (!grabbedObject?.classList.contains('video-gesture-ball') || twoHandStretch) return;
     const pinch = getPinchData(hand, canvas, area.getBoundingClientRect());
     if (!pinch) return;
-    const compression = Math.max(0, Math.min(1, (46 - pinch.distance) / 28));
+    const compression = Math.max(0, Math.min(1, (pinch.pinchThreshold - pinch.distance) / Math.max(22, pinch.pinchThreshold * .58)));
     grabbedObject.style.setProperty('--grab-scale-x', (1 + compression * .16).toFixed(3));
     grabbedObject.style.setProperty('--grab-scale-y', (1.02 - compression * .24).toFixed(3));
 }
@@ -760,7 +788,7 @@ function updateInteraction(hand, canvas, currentGesture, handPosition, allHands 
     const mappedY = mappedPoint.y;
 
     if (activeMode === 'ball') {
-        syncLiveHand(mappedX, mappedY, currentGesture);
+        syncLiveHand(mappedX, mappedY, currentGesture, hand, canvas, rect);
         applyImmediateHandHit();
         updateAirHud(currentGesture);
     } else {
@@ -911,7 +939,7 @@ function tryGrabObject(cursorX, cursorY) {
         );
 
         // 如果距离足够近，则抓取物品
-        const grabRadius = obj.classList.contains('gesture-ball') ? objRect.width * .82 : 58;
+        const grabRadius = obj.classList.contains('gesture-ball') ? Math.max(78, objRect.width * 1.12) : 58;
         if (distance < grabRadius) {
             const isVideoBall = obj.classList.contains('video-gesture-ball');
             if (!isVideoBall) {

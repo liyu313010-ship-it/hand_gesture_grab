@@ -10,6 +10,8 @@ let currentGesture = '未检测到手势';
 let handPosition = { x: 0, y: 0 };
 let currentFingerCount = 0;
 let currentLetter = '—';
+// 捏合使用迟滞阈值：进入抓取后允许两指略微抖开，避免球体在手中频繁抓取/释放。
+let pinchActive = false;
 const SMOOTH_WINDOW = 6;
 let leftCountHistory = [];
 let rightCountHistory = [];
@@ -60,8 +62,8 @@ async function initDetector() {
       modelType: 'full',
       maxHands: 2,
       // 稍微降低检测/跟踪门槛，改善手掌较远、靠近画面边缘或光线一般时的连续识别。
-      minDetectionConfidence: 0.45,
-      minTrackingConfidence: 0.45,
+      minDetectionConfidence: 0.4,
+      minTrackingConfidence: 0.4,
       // 资源位于 public/mediapipe/hands/，dev 与 build 后都能按同一路径加载（原来指向 node_modules 的路径在构建产物中会 404）。
       solutionPath: `${import.meta.env.BASE_URL}mediapipe/hands/`
     }
@@ -102,6 +104,7 @@ function detectHands(video, canvas, detector) {
         // 更新交互
         updateInteraction(hands[0], canvas, currentGesture, handPosition, hands);
       } else {
+        pinchActive = false;
         currentGesture = '未检测到手势';
         currentFingerCount = 0;
         currentLetter = '—';
@@ -166,16 +169,31 @@ function analyzeGesture(hand) {
     const palmWidth = indexMcp && pinkyMcp
       ? Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y)
       : 80;
-    // 使用掌宽比例判断捏合，兼顾手离镜头远近；固定40像素在远距离时容易漏识别。
-    const pinchThreshold = Math.max(30, Math.min(58, palmWidth * .52));
+    // 使用掌宽比例与迟滞判断捏合：开始抓取的门槛较宽，已抓住后再略微张开也不会立刻掉球。
+    // 这样既适应手离镜头远近，也能吸收关键点的逐帧抖动。
+    const pinchStartThreshold = Math.max(32, Math.min(72, palmWidth * .7));
+    const pinchReleaseThreshold = Math.max(42, Math.min(88, palmWidth * .9));
+    const isPinching = pinchActive
+      ? distance < pinchReleaseThreshold
+      : distance < pinchStartThreshold;
 
-    if (distance < pinchThreshold) {
+    const middleTip = hand.keypoints.find(k => k.name === 'middle_finger_tip');
+    const middlePip = hand.keypoints.find(k => k.name === 'middle_finger_pip');
+    const middleExtended = middleTip && middlePip && wrist &&
+      Math.hypot(middleTip.x - wrist.x, middleTip.y - wrist.y) >
+      Math.hypot(middlePip.x - wrist.x, middlePip.y - wrist.y) * 1.1;
+
+    if (isPinching) {
+      pinchActive = true;
       currentGesture = '抓取手势';
-    } else if (extendedCount === 0) {
+    } else if (extendedCount === 0 || (currentGesture === '握拳吸引' && extendedCount <= 1 && !indexExtended)) {
+      pinchActive = false;
       currentGesture = '握拳吸引';
-    } else if (extendedCount === 1 && indexExtended) {
+    } else if (indexExtended && !middleExtended) {
+      pinchActive = false;
       currentGesture = '指尖点按';
     } else {
+      pinchActive = false;
       currentGesture = '张开手势';
     }
 
