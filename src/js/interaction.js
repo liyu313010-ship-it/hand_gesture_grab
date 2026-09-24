@@ -156,9 +156,8 @@ function initialiseBallState(ball, index, area, force = false) {
         x: Math.max(0, Math.min(area.clientWidth - size, spawn * area.clientWidth - size / 2)),
         y: -size - index * 68,
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
-        vy: 28 + index * 12,
-        lastHit: 0,
-        bounceCount: 0
+        vy: 18 + index * 8,
+        lastHit: 0
     };
     ballStates.set(ball, state);
     ball.style.left = `${state.x}px`;
@@ -173,8 +172,7 @@ function respawnBall(ball, state, index, area) {
     state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
     state.y = -size - 24 - index * 18;
     state.vx = (Math.random() - .5) * 86;
-    state.vy = 32 + Math.random() * 38;
-    state.bounceCount = 0;
+    state.vy = 18 + Math.random() * 22;
     state.lastHit = 0;
     ball.classList.remove('ball-respawn');
     void ball.offsetWidth;
@@ -238,7 +236,8 @@ function animateVideoBalls(frameTime) {
                 return;
             }
 
-            state.vy = Math.min(state.vy + 285 * elapsed, 310);
+            // 较缓的重力和终端速度，为摄像头手势托举、拍击与抓取留出反应时间。
+            state.vy = Math.min(state.vy + 155 * elapsed, 180);
 
             if (handIsLive && liveHandState.gesture === '张开手势') {
                 const ballX = state.x + size / 2;
@@ -272,23 +271,14 @@ function animateVideoBalls(frameTime) {
             state.x += state.vx * elapsed;
             state.y += state.vy * elapsed;
             const maxX = Math.max(0, area.clientWidth - size);
-            const maxY = Math.max(0, area.clientHeight - size);
             if (state.x <= 0 || state.x >= maxX) {
                 state.x = Math.max(0, Math.min(state.x, maxX));
                 state.vx *= -.76;
                 pulseBall(ball);
             }
-            if (state.y >= maxY) {
-                state.y = maxY;
-                state.bounceCount += 1;
-                if (state.bounceCount >= 3) {
-                    // 每颗球完成若干次弹跳后回到画面顶部，形成持续循环的下落球流。
-                    respawnBall(ball, state, index, area);
-                } else {
-                    state.vy = -Math.max(105, Math.abs(state.vy) * .68);
-                    state.vx *= .985;
-                    pulseBall(ball);
-                }
+            if (state.y >= area.clientHeight + size * .25) {
+                // 不设置“地面”：球从画面底部自由离场并消失，再从顶部重新进入。
+                respawnBall(ball, state, index, area);
             }
             ball.style.left = `${state.x}px`;
             ball.style.top = `${state.y}px`;
