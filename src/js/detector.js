@@ -1,7 +1,7 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import { drawHands, clearCanvas } from './renderer.js';
 import { updateInteraction } from './interaction.js';
-import { recognizeAlphabet, fingerCountToLetter } from './gesture-recognition.js';
+import { recognizeAlphabet, fingerCountToLetter, countExtendedFingers } from './gesture-recognition.js';
 import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
 import { initSpeechSynthesis } from './voice.js';
 
@@ -59,7 +59,11 @@ async function initDetector() {
       runtime: 'mediapipe',
       modelType: 'full',
       maxHands: 2,
-      solutionPath: "node_modules/@mediapipe/hands/"
+      // 稍微降低检测/跟踪门槛，改善手掌较远、靠近画面边缘或光线一般时的连续识别。
+      minDetectionConfidence: 0.45,
+      minTrackingConfidence: 0.45,
+      // 资源位于 public/mediapipe/hands/，dev 与 build 后都能按同一路径加载（原来指向 node_modules 的路径在构建产物中会 404）。
+      solutionPath: `${import.meta.env.BASE_URL}mediapipe/hands/`
     }
   );
   return detector;
@@ -96,7 +100,7 @@ function detectHands(video, canvas, detector) {
         }
 
         // 更新交互
-        updateInteraction(hands[0], canvas, currentGesture, handPosition);
+        updateInteraction(hands[0], canvas, currentGesture, handPosition, hands);
       } else {
         currentGesture = '未检测到手势';
         currentFingerCount = 0;
@@ -150,8 +154,27 @@ function analyzeGesture(hand) {
     );
 
     // 根据距离判断手势
-    if (distance < 40) {
+    const indexPip = hand.keypoints.find(k => k.name === 'index_finger_pip');
+    const wrist = hand.keypoints.find(k => k.name === 'wrist');
+    const extendedCount = countExtendedFingers(hand);
+    const indexExtended = indexPip && wrist &&
+      Math.hypot(indexTip.x - wrist.x, indexTip.y - wrist.y) >
+      Math.hypot(indexPip.x - wrist.x, indexPip.y - wrist.y) * 1.14;
+
+    const indexMcp = hand.keypoints.find(k => k.name === 'index_finger_mcp');
+    const pinkyMcp = hand.keypoints.find(k => k.name === 'pinky_finger_mcp');
+    const palmWidth = indexMcp && pinkyMcp
+      ? Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y)
+      : 80;
+    // 使用掌宽比例判断捏合，兼顾手离镜头远近；固定40像素在远距离时容易漏识别。
+    const pinchThreshold = Math.max(30, Math.min(58, palmWidth * .52));
+
+    if (distance < pinchThreshold) {
       currentGesture = '抓取手势';
+    } else if (extendedCount === 0) {
+      currentGesture = '握拳吸引';
+    } else if (extendedCount === 1 && indexExtended) {
+      currentGesture = '指尖点按';
     } else {
       currentGesture = '张开手势';
     }
@@ -160,6 +183,9 @@ function analyzeGesture(hand) {
       // 捏合时使用两指中点，球体会在真实捏合位置被抓住。
       handPosition.x = (thumbTip.x + indexTip.x) / 2;
       handPosition.y = (thumbTip.y + indexTip.y) / 2;
+    } else if (currentGesture === '指尖点按') {
+      handPosition.x = indexTip.x;
+      handPosition.y = indexTip.y;
     } else {
       // 张开手掌时使用掌心位置，便于从下方托举或快速拍击球体。
       const palmNames = ['wrist', 'index_finger_mcp', 'middle_finger_mcp', 'ring_finger_mcp', 'pinky_finger_mcp'];

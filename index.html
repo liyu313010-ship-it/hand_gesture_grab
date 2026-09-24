@@ -6,6 +6,7 @@
     <meta name="theme-color" content="#07101d" />
     <title>灵动手势收藏屋</title>
     <link rel="stylesheet" href="./src/index.css">
+    <link rel="icon" type="image/png" href="./静态素材图片/线条小狗 (240).png">
   </head>
   <body>
     <div class="ambient ambient-one"></div>
@@ -41,7 +42,25 @@
         <button class="mode-button" type="button" data-mode="collection" aria-pressed="false">收藏品抓取</button>
         <button class="mode-button" type="button" data-mode="ball" aria-pressed="false">球体抓取</button>
       </div>
-      <img class="decor hero-sticker" src="./19套表情包素材/开心的跳起来.gif" alt="开心跳跃动态贴纸">
+      <div class="meme-strip" aria-hidden="true">
+        <img src="./19套表情包素材/一块跑.gif" alt="">
+        <img src="./19套表情包素材/一起开心.gif" alt="">
+        <img src="./19套表情包素材/两个人听音乐、奔跑.gif" alt="">
+        <img src="./19套表情包素材/拉手手.gif" alt="">
+        <img src="./19套表情包素材/恩爱.gif" alt="">
+        <span class="meme-pair">
+          <img src="./19套表情包素材/18开心.gif" alt="">
+          <img src="./19套表情包素材/19开心.gif" alt="">
+        </span>
+        <span class="meme-pair">
+          <img class="flip-x" src="./19套表情包素材/18扔爱心.gif" alt="">
+          <img src="./19套表情包素材/19扔爱心.gif" alt="">
+        </span>
+        <span class="meme-pair">
+          <img src="./19套表情包素材/18吃惊.gif" alt="">
+          <img src="./19套表情包素材/19吃惊.gif" alt="">
+        </span>
+      </div>
     </header>
 
     <main class="workspace">
@@ -56,42 +75,62 @@
           <video id="video" autoplay playsinline></video>
           <canvas id="output"></canvas>
           <span class="live-indicator"><i></i>LIVE</span>
-          <div class="video-placeholder">摄像头画面</div>
-          <div class="gesture-ball video-gesture-ball grabbable ball-coral" data-name="珊瑚光球" data-spawn="0.12" role="img" aria-label="摄像头画面中可抓取的珊瑚色立体光球">
-            <i class="ball-highlight"></i><i class="ball-shine"></i><span>珊瑚</span>
+          <div class="video-placeholder">
+            <img src="./19套表情包素材/快来、摁铃.gif" alt="">
+            <span>点击「启动摄像头」开始互动</span>
           </div>
-          <div class="gesture-ball video-gesture-ball grabbable ball-cyan" data-name="青空光球" data-spawn="0.38" role="img" aria-label="摄像头画面中可抓取的青色立体光球">
-            <i class="ball-highlight"></i><i class="ball-shine"></i><span>青空</span>
+          <div id="modelLoading" class="model-loading">
+            <i class="spinner"></i>
+            <span id="modelLoadingText">模型初始化中…</span>
           </div>
-          <div class="gesture-ball video-gesture-ball grabbable ball-violet" data-name="星云光球" data-spawn="0.64" role="img" aria-label="摄像头画面中可抓取的紫色立体光球">
-            <i class="ball-highlight"></i><i class="ball-shine"></i><span>星云</span>
+          <div class="gesture-ball video-gesture-ball grabbable ball-coral" data-spawn="0.12" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
           </div>
-          <div class="gesture-ball video-gesture-ball grabbable ball-lime" data-name="极光光球" data-spawn="0.84" role="img" aria-label="摄像头画面中可抓取的绿色立体光球">
-            <i class="ball-highlight"></i><i class="ball-shine"></i><span>极光</span>
+          <div class="gesture-ball video-gesture-ball grabbable ball-amber" data-spawn="0.26" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
+          </div>
+          <div class="gesture-ball video-gesture-ball grabbable ball-cyan" data-spawn="0.38" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
+          </div>
+          <div class="gesture-ball video-gesture-ball grabbable ball-violet" data-spawn="0.64" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
+          </div>
+          <div class="gesture-ball video-gesture-ball grabbable ball-sky" data-spawn="0.74" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
+          </div>
+          <div class="gesture-ball video-gesture-ball grabbable ball-lime" data-spawn="0.84" role="img" aria-label="画面中飘落的可抓取素材球">
+            <img class="ball-asset" alt="">
+            <i class="ball-highlight"></i><i class="ball-shine"></i>
+          </div>
+          <div class="air-goal" aria-label="空中投球目标">
+            <i></i><span>目标</span>
+          </div>
+          <div class="air-control-hud" aria-live="polite">
+            <span id="airGesture">等待手势</span>
+            <b>得分 <i id="airScore">0</i></b>
           </div>
           <div class="ball-particle-layer" aria-hidden="true"></div>
+          <button id="startBtn" class="btn" type="button">
+            <svg class="btn-icon icon-camera-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5.5 7h7.6a2.4 2.4 0 0 1 2.4 2.4v5.2a2.4 2.4 0 0 1-2.4 2.4H5.5a2.4 2.4 0 0 1-2.4-2.4V9.4A2.4 2.4 0 0 1 5.5 7Z" />
+              <path d="m15.5 10.6 5-2.9v8.6l-5-2.9" />
+              <path d="m3.4 3.4 17.2 17.2" />
+            </svg>
+            <svg class="btn-icon icon-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5.5 7h7.6a2.4 2.4 0 0 1 2.4 2.4v5.2a2.4 2.4 0 0 1-2.4 2.4H5.5a2.4 2.4 0 0 1-2.4-2.4V9.4A2.4 2.4 0 0 1 5.5 7Z" />
+              <path d="m15.5 10.6 5-2.9v8.6l-5-2.9" />
+            </svg>
+            <span id="startBtnLabel">启动摄像头</span>
+          </button>
         </div>
         <div class="camera-controls">
-          <button id="startBtn" class="btn"><span>启动摄像头</span><b>→</b></button>
           <div id="status" class="status">状态：模型初始化中</div>
         </div>
-        <div class="recognition-panel" aria-live="polite">
-          <div class="recognition-item">
-            <span class="recognition-label">NUMBER / 编码数字</span>
-            <strong id="fingerCount">0</strong>
-          </div>
-          <div class="recognition-arrow">→</div>
-          <div class="recognition-item letter-item">
-            <span class="recognition-label">LETTER / 识别字母</span>
-            <strong id="letterResult">—</strong>
-          </div>
-        </div>
-        <div class="two-hand-math">
-          <div><span>双手加数</span><b id="leftCount">0</b><i>+</i><b id="rightCount">0</b><i>=</i><strong id="sumCount">0</strong></div>
-          <div><span>字母编码</span><b id="leftCode">0</b><i id="codeOperator"></i><b id="rightCode"></b><i>→</i><strong id="letterCode">0</strong></div>
-        </div>
-        <div id="alphabetMap" class="alphabet-map" aria-label="A到Z字母映射表"></div>
-        <p class="encoding-tip">单手1—5指映射A—E；双手将两侧手指数拼成两位数（如 2 与 3 拼成 23），1—26 依次对应A—Z。</p>
       </section>
 
       <section class="interaction-section panel">
@@ -114,6 +153,23 @@
               <small>编码 <b id="modeCodeResult">0</b></small>
             </div>
             <p class="letter-mode-hint">张开手指完成数字识别；双手组合可扩展到A—Z。</p>
+            <div class="recognition-panel" aria-live="polite">
+              <div class="recognition-item">
+                <span class="recognition-label">NUMBER / 编码数字</span>
+                <strong id="fingerCount">0</strong>
+              </div>
+              <div class="recognition-arrow">→</div>
+              <div class="recognition-item letter-item">
+                <span class="recognition-label">LETTER / 识别字母</span>
+                <strong id="letterResult">—</strong>
+              </div>
+            </div>
+            <div class="two-hand-math">
+              <div><span>双手加数</span><b id="leftCount">0</b><i>+</i><b id="rightCount">0</b><i>=</i><strong id="sumCount">0</strong></div>
+              <div><span>字母编码</span><b id="leftCode">0</b><i id="codeOperator"></i><b id="rightCode"></b><i>→</i><strong id="letterCode">0</strong></div>
+            </div>
+            <div id="alphabetMap" class="alphabet-map" aria-label="A到Z字母映射表"></div>
+            <p class="encoding-tip">单手1—5指映射A—E；双手将两侧手指数拼成两位数（如 2 与 3 拼成 23），1—26 依次对应A—Z。</p>
           </div>
 
           <div class="mode-layer collection-mode-layer" data-mode-layer="collection">
@@ -154,36 +210,10 @@
             </div>
           </div>
 
-          <div class="mode-layer ball-mode-layer" data-mode-layer="ball">
-            <div class="ball-guide-card">
-              <span>摄像头增强现实交互</span>
-              <strong>彩色光球会在左侧实时画面循环下落</strong>
-              <ol>
-                <li>张开手掌，从球下方托起球体</li>
-                <li>快速挥动手掌，可以弹性拍开球体</li>
-                <li>拇指与食指捏合抓取，张开放下</li>
-              </ol>
-            </div>
-            <p class="ball-mode-hint">球体从底部离场消失后会重新下落，没有地面碰撞。</p>
-          </div>
         </div>
         <div id="interactionStatus" class="status interaction-status">手势状态：未检测到手势</div>
       </section>
     </main>
-
-    <section class="guide panel">
-      <img class="decor guide-sticker" src="./19套表情包素材/加油、鼓劲.gif" alt="加油鼓劲动态贴纸">
-      <div class="guide-intro">
-        <span class="section-index">HOW TO PLAY</span>
-        <h2>三步开始交互</h2>
-        <p>保持光线充足，让手掌完整进入镜头。</p>
-      </div>
-      <ol class="guide-steps">
-        <li><b>01</b><div><strong>启动镜头</strong><span>允许浏览器使用摄像头</span></div></li>
-        <li><b>02</b><div><strong>组合A—Z</strong><span>单手识别A—E，双手组合扩展到Z</span></div></li>
-        <li><b>03</b><div><strong>手势交互</strong><span>捏合抓取，张掌托举，快速挥手拍击</span></div></li>
-      </ol>
-    </section>
 
     <div id="reactionPopup" class="reaction-popup" aria-live="polite" aria-hidden="true">
       <div class="reaction-card">
@@ -191,6 +221,16 @@
         <img id="reactionImage" src="" alt="抓取物品反馈动图">
         <strong id="reactionText">已抓取收藏品</strong>
         <small>移动手掌可以拖动物品</small>
+      </div>
+    </div>
+
+    <div id="modeGuidePopup" class="mode-guide-popup" role="dialog" aria-modal="true" aria-labelledby="modeGuideTitle" aria-hidden="true">
+      <div class="mode-guide-card">
+        <button id="modeGuideClose" class="mode-guide-close" type="button" aria-label="关闭交互说明">✕</button>
+        <span id="modeGuideKicker" class="mode-guide-kicker">LETTER RECOGNITION</span>
+        <h3 id="modeGuideTitle">字母识别台</h3>
+        <p id="modeGuideIntro" class="mode-guide-intro"></p>
+        <ul id="modeGuideSteps" class="mode-guide-steps"></ul>
       </div>
     </div>
 

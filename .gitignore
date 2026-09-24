@@ -15,6 +15,7 @@ dist-ssr
 .chrome-layout-profile/
 hand_gesture_page*.png
 layout_test_*.png
+_diag_shot_*.png
 
 # Editor directories and files
 .vscode/*
