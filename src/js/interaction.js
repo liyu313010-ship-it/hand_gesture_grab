@@ -70,9 +70,30 @@ const BALL_MATERIALS = [
     { id: 'bubble', label: '泡泡', gravity: .16, drag: .972, bounce: .9, merge: true }
 ];
 const MATERIAL_CLASS_NAMES = BALL_MATERIALS.map(material => `material-${material.id}`);
+const BALL_MOODS = [
+    { id: 'curious', label: '好奇' },
+    { id: 'shy', label: '害羞' },
+    { id: 'happy', label: '开心' },
+    { id: 'calm', label: '平静' },
+    { id: 'playful', label: '调皮' }
+];
+const MOOD_CLASS_NAMES = [...BALL_MOODS.map(mood => `mood-${mood.id}`), 'mood-angry', 'mood-lonely'];
 
 function materialById(id) {
     return BALL_MATERIALS.find(material => material.id === id) || BALL_MATERIALS[0];
+}
+
+function moodLabel(id) {
+    return BALL_MOODS.find(mood => mood.id === id)?.label || ({ angry: '生气', lonely: '孤独' }[id] ?? '平静');
+}
+
+function setBallMood(ball, state, mood) {
+    ball.classList.remove(...MOOD_CLASS_NAMES);
+    ball.classList.add(`mood-${mood}`);
+    ball.dataset.mood = mood;
+    if (state) state.mood = mood;
+    const badge = ball.querySelector('.ball-material-tag');
+    if (badge) badge.textContent = `${ball.dataset.materialLabel || '球体'} · ${moodLabel(mood)}`;
 }
 
 // 球体外观刷新：换上一张新素材、换一种玻璃颜色与随机大小；素材名写入 alt / title 便于识别。
@@ -111,7 +132,8 @@ function applyBallLook(ball) {
         badge.className = 'ball-material-tag';
         ball.appendChild(badge);
     }
-    badge.textContent = material.label;
+    const mood = BALL_MOODS[Math.floor(Math.random() * BALL_MOODS.length)];
+    setBallMood(ball, null, mood.id);
 }
 
 // 指尖向上戳的判定速度（px/s，屏幕坐标向上为负），达到即触发球体爆裂。
@@ -665,6 +687,9 @@ function applyImmediateHandHit() {
         state.vy += ny * strength + liveHandState.vy * .5;
         state.lastHit = now;
         state.touched = true;
+        state.lastTouchedAt = now;
+        state.moodChangedAt = now;
+        setBallMood(ball, state, speed > 220 ? 'angry' : 'playful');
         pulseBall(ball);
         createSoftParticles(ball, 'hit', isFingerPoke ? 6 : 9);
         updateFieldHud(isFingerPoke ? '指尖弹击' : '整手拍击', material.label);
@@ -685,7 +710,10 @@ function initialiseBallState(ball, index, area, force = false) {
         vy: 10 + index * 5,
         size,
         material: ball.dataset.material || 'water',
+        mood: ball.dataset.mood || 'calm',
         polarity: index % 2 ? -1 : 1,
+        lastTouchedAt: performance.now(),
+        moodChangedAt: performance.now(),
         portalCooldown: 0,
         mergeCooldown: 0,
         lastHit: 0,
@@ -713,7 +741,10 @@ function respawnBall(ball, state, index, area) {
     state.vy = 10 + Math.random() * 9;
     state.size = size;
     state.material = ball.dataset.material || 'water';
+    state.mood = ball.dataset.mood || 'calm';
     state.polarity = Math.random() > .5 ? 1 : -1;
+    state.lastTouchedAt = performance.now();
+    state.moodChangedAt = performance.now();
     state.portalCooldown = 0;
     state.mergeCooldown = performance.now() + 700;
     state.lastHit = 0;
@@ -1008,6 +1039,54 @@ function applyGestureFields(state, size, elapsed, frameTime) {
     }
 }
 
+function applyAutonomousBehavior(ball, state, size, elapsed, frameTime, index) {
+    const centerX = state.x + size / 2;
+    const centerY = state.y + size / 2;
+    const handVisible = liveHandState.active && frameTime - liveHandState.updatedAt < 320;
+
+    if (frameTime - (state.lastTouchedAt || 0) > 8200 && state.mood !== 'lonely') {
+        state.moodChangedAt = frameTime;
+        setBallMood(ball, state, 'lonely');
+    }
+    if (!handVisible) {
+        // 没有人靠近时仍保留轻微自主漂移，让球体看起来是“活着的”。
+        state.vx += Math.sin(frameTime / 720 + index * 1.7) * 5 * elapsed;
+        return;
+    }
+
+    const dx = liveHandState.x - centerX;
+    const dy = liveHandState.y - centerY;
+    const distance = Math.hypot(dx, dy) || 1;
+    const nx = dx / distance;
+    const ny = dy / distance;
+    const influence = Math.max(0, 1 - distance / 330);
+    if (!influence) return;
+
+    switch (state.mood) {
+        case 'curious':
+        case 'lonely':
+            state.vx += nx * 42 * influence * elapsed;
+            state.vy += ny * 42 * influence * elapsed;
+            break;
+        case 'shy':
+            state.vx -= nx * 58 * influence * elapsed;
+            state.vy -= ny * 58 * influence * elapsed;
+            break;
+        case 'happy':
+        case 'playful':
+            state.vx += -ny * 46 * influence * elapsed;
+            state.vy += nx * 46 * influence * elapsed;
+            break;
+        case 'angry':
+            state.vx += nx * 78 * influence * elapsed;
+            state.vy += ny * 78 * influence * elapsed;
+            if (frameTime - state.moodChangedAt > 2600) setBallMood(ball, state, 'calm');
+            break;
+        default:
+            state.vx += Math.sin(frameTime / 900 + index) * 3 * elapsed;
+    }
+}
+
 function animateVideoBalls(frameTime) {
     const elapsed = Math.min((frameTime - previousFrameTime) / 1000 || .016, .034);
     previousFrameTime = frameTime;
@@ -1035,6 +1114,8 @@ function animateVideoBalls(frameTime) {
                 state.vx = Math.max(-520, Math.min(520, liveHandState.vx * .72));
                 state.vy = Math.max(-520, Math.min(520, liveHandState.vy * .72));
                 state.touched = true;
+                state.lastTouchedAt = frameTime;
+                if (state.mood !== 'happy') setBallMood(ball, state, 'happy');
                 return;
             }
             // 爆裂动画期间暂停物理，等待重生。
@@ -1052,6 +1133,7 @@ function animateVideoBalls(frameTime) {
             }
 
             applyGestureFields(state, size, elapsed, frameTime);
+            applyAutonomousBehavior(ball, state, size, elapsed, frameTime, index);
             applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area);
             applyBodyCollision(state, size, frameTime);
 
@@ -1070,6 +1152,7 @@ function animateVideoBalls(frameTime) {
                     state.vx += (dx / distance) * force * elapsed;
                     state.vy += (dy / distance) * force * elapsed;
                     state.touched = true;
+                    state.lastTouchedAt = frameTime;
                     updateFieldHud(`握拳引力 · 范围 ${Math.round(fieldRadius)}px`);
                     if (frameTime - state.lastFieldParticle > 360 && distance < fieldRadius * .75) {
                         createSoftParticles(ball, 'grab', 5);
@@ -1095,6 +1178,7 @@ function animateVideoBalls(frameTime) {
                     state.vy = Math.min(liveHandState.vy * .72, 18);
                     state.vx += liveHandState.vx * elapsed * 1.8;
                     state.touched = true;
+                    state.lastTouchedAt = frameTime;
                     updateFieldHud('张掌托举 · 慢速黏附', material.label);
                 } else if (distance < size / 2 + 54 && frameTime - state.lastHit > 115) {
                     // 快速扫过球体视作拍击，手速越快，球获得的弹性冲量越大。
@@ -1104,6 +1188,10 @@ function animateVideoBalls(frameTime) {
                     state.vx += nx * strength + liveHandState.vx * .48;
                     state.vy += ny * strength + liveHandState.vy * .48;
                     state.lastHit = frameTime;
+                    state.touched = true;
+                    state.lastTouchedAt = frameTime;
+                    state.moodChangedAt = frameTime;
+                    setBallMood(ball, state, handSpeed > 220 ? 'angry' : 'playful');
                     pulseBall(ball);
                     createSoftParticles(ball, 'hit', 9);
                 } else {
@@ -1114,6 +1202,7 @@ function animateVideoBalls(frameTime) {
                         state.vx += dx / distance * force * elapsed;
                         state.vy += dy / distance * force * elapsed;
                         state.touched = true;
+                        state.lastTouchedAt = frameTime;
                         updateFieldHud(`张掌斥力 · 强度 ${Math.round(liveHandState.spread * 32)}%`, material.label);
                     }
                 }
@@ -1138,6 +1227,7 @@ function animateVideoBalls(frameTime) {
                         state.lastPoke = frameTime;
                     }
                     state.touched = true;
+                    state.lastTouchedAt = frameTime;
                 }
             }
 
@@ -1508,7 +1598,12 @@ function tryGrabObject(cursorX, cursorY) {
             bringToFront(obj);
             obj.classList.add('grabbing');
             const ballState = ballStates.get(obj);
-            if (ballState) ballState.touched = true;
+            if (ballState) {
+                ballState.touched = true;
+                ballState.lastTouchedAt = performance.now();
+                ballState.moodChangedAt = performance.now();
+                setBallMood(obj, ballState, 'happy');
+            }
             createSoftParticles(obj, 'grab');
             if (!isVideoBall) showReaction(obj);
             break;
