@@ -143,7 +143,7 @@ h1 span { color: var(--yellow); }
 
 .video-container {
   position: relative;
-  height: clamp(150px, 22vh, 215px);
+  height: clamp(235px, 30vh, 290px);
   flex: 0 0 auto;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.12);
@@ -567,7 +567,7 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
   .model-chip { padding: 4px 8px; font-size: .55rem; }
   .panel-sticker { top: -18px; width: 42px; height: 42px; }
 
-  .video-container { height: 125px; border-radius: 13px; }
+  .video-container { height: clamp(220px, 30vh, 245px); border-radius: 13px; }
   .camera-controls { margin-top: 5px; }
   .btn { padding: 7px 11px; font-size: .72rem; }
   .status { min-height: 31px; padding: 4px 8px; font-size: .64rem; }
