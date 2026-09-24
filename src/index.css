@@ -567,21 +567,23 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
   .model-chip { padding: 4px 8px; font-size: .55rem; }
   .panel-sticker { top: -18px; width: 42px; height: 42px; }
 
-  .video-container { height: clamp(220px, 30vh, 245px); border-radius: 13px; }
-  .camera-controls { margin-top: 5px; }
-  .btn { padding: 7px 11px; font-size: .72rem; }
-  .status { min-height: 31px; padding: 4px 8px; font-size: .64rem; }
+  .video-container { height: clamp(250px, 34vh, 275px); border-radius: 13px; }
+  .camera-controls { margin-top: 4px; }
+  .btn { padding: 5px 10px; font-size: .68rem; }
+  .status { min-height: 27px; padding: 3px 7px; font-size: .59rem; }
 
-  .recognition-panel { margin-top: 5px; padding: 6px 10px; border-radius: 12px; }
-  .recognition-label { font-size: .55rem; }
-  .recognition-item strong { font-size: 1.45rem; }
-  .two-hand-math { margin-top: 4px; gap: 5px; }
-  .two-hand-math > div { min-height: 27px; font-size: .58rem; }
-  .two-hand-math b, .two-hand-math strong { font-size: .84rem; }
-  .alphabet-map { margin-top: 4px; gap: 2px; }
-  .alphabet-key { min-height: 19px; border-radius: 5px; font-size: .55rem; }
-  .alphabet-key small { font-size: .42rem; }
-  .encoding-tip { margin-top: 3px; font-size: .51rem; line-height: 1.2; }
+  .recognition-panel { margin-top: 4px; padding: 4px 9px; border-radius: 10px; }
+  .recognition-item { gap: 2px; }
+  .recognition-label { font-size: .49rem; }
+  .recognition-item strong { font-size: 1.24rem; }
+  .recognition-arrow { font-size: 1.08rem; }
+  .two-hand-math { margin-top: 3px; gap: 4px; }
+  .two-hand-math > div { min-height: 23px; font-size: .53rem; }
+  .two-hand-math b, .two-hand-math strong { font-size: .75rem; }
+  .alphabet-map { margin-top: 3px; gap: 2px; }
+  .alphabet-key { min-height: 16px; border-radius: 4px; font-size: .5rem; }
+  .alphabet-key small { font-size: .37rem; }
+  .encoding-tip { margin-top: 2px; font-size: .44rem; line-height: 1.1; }
 
   .object { width: 88px; min-height: 84px; border-radius: 14px; }
   .object img { width: 54px; height: 54px; }
