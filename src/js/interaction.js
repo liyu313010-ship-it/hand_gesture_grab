@@ -107,10 +107,11 @@ function applyBallLook(ball) {
     }
     // 球体大小每次刷洗都随机（画面里的球有大有小），素材显示比例随之变化（有的放大有的缩小），
     // 占比贴近球径，使素材最长边尽量贴着球体边缘。
-    const ballSize = 58 + Math.random() * 34;
+    // 放大球体与内部素材，让远离摄像头时也更容易看清、托举和抓取。
+    const ballSize = 74 + Math.random() * 40;
     ball.style.setProperty('--ball-size', `${ballSize}px`);
     ball.dataset.physicsSize = ballSize.toFixed(2);
-    ball.style.setProperty('--asset-scale', `${62 + Math.random() * 18}%`);
+    ball.style.setProperty('--asset-scale', `${72 + Math.random() * 17}%`);
     let paletteIndex = Math.floor(Math.random() * BALL_PALETTE.length);
     if (String(paletteIndex) === ball.dataset.paletteIndex) {
         paletteIndex = (paletteIndex + 1) % BALL_PALETTE.length;
