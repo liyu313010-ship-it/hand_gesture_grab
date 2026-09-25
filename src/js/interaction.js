@@ -159,6 +159,7 @@ const liveHandState = {
     vy: 0,
     points: [],
     segments: [],
+    palms: [],
     angle: 0,
     angularVelocity: 0,
     spread: 1,
@@ -166,6 +167,8 @@ const liveHandState = {
     gesture: '未检测到手势',
     updatedAt: 0
 };
+// 按左右手分别保存上一帧关键点，既支持双手完整碰撞，也避免检测结果顺序变化造成速度突跳。
+let physicalHandStates = new Map();
 const HAND_COLLISION_CHAINS = [
     ['wrist', 'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip'],
     ['wrist', 'index_finger_mcp', 'index_finger_pip', 'index_finger_dip', 'index_finger_tip'],
@@ -409,6 +412,10 @@ function createSoftParticles(ball, type = 'release', amount = 13) {
     const layer = document.querySelector('.ball-particle-layer');
     const area = ball.closest('.video-container');
     if (!layer || !area) return;
+    // 控制临时 DOM 数量，避免多球连续碰撞时粒子反过来拖慢手势识别。
+    const particleBudget = Math.max(0, 120 - layer.querySelectorAll('.soft-particle, .ball-motion-trail').length);
+    amount = Math.min(amount, particleBudget);
+    if (!amount) return;
 
     const centerX = ball.offsetLeft + ball.offsetWidth / 2;
     const centerY = ball.offsetTop + ball.offsetHeight / 2;
@@ -508,7 +515,7 @@ function explodeBall(ball, state, index) {
     }, 440);
 }
 
-function syncLiveHand(x, y, gesture, hand, canvas, areaRect) {
+function syncLiveHand(x, y, gesture, hand, canvas, areaRect, allHands = [hand]) {
     const now = performance.now();
     const elapsed = Math.max((now - liveHandState.updatedAt) / 1000, .016);
     if (liveHandState.updatedAt > 0 && elapsed < .18) {
@@ -524,28 +531,71 @@ function syncLiveHand(x, y, gesture, hand, canvas, areaRect) {
     liveHandState.y = y;
     // 保存整只手的关键点碰撞轮廓。张掌拍球时不再只看一个掌心点，
     // 指尖、指节或掌边碰到球体也能立刻产生响应。
-    const previousPoints = new Map(liveHandState.points.map(point => [point.name, point]));
-    const mappedPoints = hand?.keypoints?.map((point) => {
-        const mapped = mapPointToArea(point, canvas, areaRect);
-        const previous = previousPoints.get(point.name);
-        const rawVx = previous ? (mapped.x - previous.x) / elapsed : liveHandState.vx;
-        const rawVy = previous ? (mapped.y - previous.y) / elapsed : liveHandState.vy;
-        return {
-            ...mapped,
-            name: point.name,
-            vx: previous ? previous.vx * .34 + rawVx * .66 : rawVx,
-            vy: previous ? previous.vy * .34 + rawVy * .66 : rawVy
-        };
-    }) ?? [];
-    liveHandState.points = mappedPoints;
+    const nextPhysicalHands = new Map();
+    let primaryPoints = [];
+    (allHands || [hand]).forEach((trackedHand, handIndex) => {
+        const handKey = `${trackedHand?.handedness || 'hand'}-${trackedHand?.handedness ? '' : handIndex}`;
+        const previousHand = physicalHandStates.get(handKey);
+        const handElapsed = Math.max((now - (previousHand?.updatedAt || now - 16)) / 1000, .016);
+        const previousPoints = new Map((previousHand?.points || []).map(point => [point.name, point]));
+        const mappedPoints = trackedHand?.keypoints?.map((point) => {
+            const raw = mapPointToArea(point, canvas, areaRect);
+            const previous = previousPoints.get(point.name);
+            const rawSpeed = previous ? Math.hypot(raw.x - previous.x, raw.y - previous.y) / handElapsed : 0;
+            // 慢动作时抑制抖动，快速挥手时减少平滑延迟；随后再用短时预测补偿模型推理耗时。
+            const blend = rawSpeed > 430 ? .86 : rawSpeed > 180 ? .72 : .58;
+            const mapped = previous
+                ? { x: previous.x + (raw.x - previous.x) * blend, y: previous.y + (raw.y - previous.y) * blend }
+                : raw;
+            const rawVx = previous ? (mapped.x - previous.x) / handElapsed : liveHandState.vx;
+            const rawVy = previous ? (mapped.y - previous.y) / handElapsed : liveHandState.vy;
+            return {
+                ...mapped,
+                name: point.name,
+                vx: previous ? previous.vx * .28 + rawVx * .72 : rawVx,
+                vy: previous ? previous.vy * .28 + rawVy * .72 : rawVy
+            };
+        }) ?? [];
+        const pointByName = new Map(mappedPoints.map(point => [point.name, point]));
+        const segments = HAND_COLLISION_CHAINS.flatMap((chain, chainIndex) => chain.slice(0, -1)
+            .map((name, index) => {
+                const a = pointByName.get(name);
+                const b = pointByName.get(chain[index + 1]);
+                return a && b ? {
+                    a,
+                    b,
+                    palm: chainIndex === HAND_COLLISION_CHAINS.length - 1 || index === 0,
+                    updatedAt: now
+                } : null;
+            })
+            .filter(Boolean));
+        const palmNames = ['wrist', 'index_finger_mcp', 'middle_finger_mcp', 'ring_finger_mcp', 'pinky_finger_mcp'];
+        const palmPoints = palmNames.map(name => pointByName.get(name)).filter(Boolean);
+        let palm = null;
+        if (palmPoints.length >= 4) {
+            const indexMcp = pointByName.get('index_finger_mcp');
+            const pinkyMcp = pointByName.get('pinky_finger_mcp');
+            const wristPoint = pointByName.get('wrist');
+            const middleMcp = pointByName.get('middle_finger_mcp');
+            const average = (property) => palmPoints.reduce((sum, point) => sum + point[property], 0) / palmPoints.length;
+            const palmWidth = indexMcp && pinkyMcp ? Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y) : 54;
+            const palmLength = wristPoint && middleMcp ? Math.hypot(wristPoint.x - middleMcp.x, wristPoint.y - middleMcp.y) : palmWidth;
+            palm = {
+                x: average('x'), y: average('y'), vx: average('vx'), vy: average('vy'),
+                radius: Math.max(25, Math.min(66, (palmWidth + palmLength) * .31)),
+                updatedAt: now
+            };
+        }
+        const trackedState = { points: mappedPoints, segments, palm, updatedAt: now };
+        nextPhysicalHands.set(handKey, trackedState);
+        if (trackedHand === hand) primaryPoints = mappedPoints;
+    });
+    physicalHandStates = nextPhysicalHands;
+    const mappedPoints = primaryPoints.length ? primaryPoints : [...nextPhysicalHands.values()][0]?.points || [];
+    liveHandState.points = [...nextPhysicalHands.values()].flatMap(state => state.points);
+    liveHandState.segments = [...nextPhysicalHands.values()].flatMap(state => state.segments);
+    liveHandState.palms = [...nextPhysicalHands.values()].map(state => state.palm).filter(Boolean);
     const pointByName = new Map(mappedPoints.map(point => [point.name, point]));
-    liveHandState.segments = HAND_COLLISION_CHAINS.flatMap((chain, chainIndex) => chain.slice(0, -1)
-        .map((name, index) => {
-            const a = pointByName.get(name);
-            const b = pointByName.get(chain[index + 1]);
-            return a && b ? { a, b, palm: chainIndex === HAND_COLLISION_CHAINS.length - 1 || index === 0 } : null;
-        })
-        .filter(Boolean));
     const wrist = pointByName.get('wrist');
     const middleMcp = pointByName.get('middle_finger_mcp');
     const indexMcp = pointByName.get('index_finger_mcp');
@@ -621,20 +671,36 @@ function nearestLiveHandPoint(x, y, includeAllPoints = true) {
 // 将整只手建模为由掌边和指骨组成的连续胶囊碰撞体。碰撞按接触法线分离球体，
 // 再以局部手指速度计算冲量与切向摩擦，因此托、拍、拨、扫都会传递真实方向和力度。
 function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
-    if (!liveHandState.active || frameTime - liveHandState.updatedAt > 230 || !liveHandState.segments.length) return false;
+    if (!liveHandState.active || frameTime - liveHandState.updatedAt > 230 || !liveHandState.segments.length) {
+        ball.classList.remove('hand-near');
+        return false;
+    }
     const center = { x: state.x + size / 2, y: state.y + size / 2 };
     const radius = size / 2;
     let best = null;
+    let nearestGap = Infinity;
+    const predictionSeconds = Math.min(.065, Math.max(.018, (frameTime - liveHandState.updatedAt) / 1000 + .024));
     liveHandState.segments.forEach((segment) => {
-        const closest = closestPointOnSegment(center, segment.a, segment.b);
+        const predictedA = {
+            ...segment.a,
+            x: segment.a.x + Math.max(-900, Math.min(900, segment.a.vx)) * predictionSeconds,
+            y: segment.a.y + Math.max(-900, Math.min(900, segment.a.vy)) * predictionSeconds
+        };
+        const predictedB = {
+            ...segment.b,
+            x: segment.b.x + Math.max(-900, Math.min(900, segment.b.vx)) * predictionSeconds,
+            y: segment.b.y + Math.max(-900, Math.min(900, segment.b.vy)) * predictionSeconds
+        };
+        const closest = closestPointOnSegment(center, predictedA, predictedB);
         const segmentLengthSquared = closest.dx * closest.dx + closest.dy * closest.dy || 1;
         const t = Math.max(0, Math.min(1,
             ((closest.x - segment.a.x) * closest.dx + (closest.y - segment.a.y) * closest.dy) / segmentLengthSquared));
         const dx = center.x - closest.x;
         const dy = center.y - closest.y;
         const distance = Math.hypot(dx, dy);
-        const skin = segment.palm ? 17 : 11;
+        const skin = segment.palm ? 23 : 15;
         const penetration = radius + skin - distance;
+        nearestGap = Math.min(nearestGap, distance - radius - skin);
         if (penetration <= 0 || (best && penetration <= best.penetration)) return;
         best = {
             dx,
@@ -646,6 +712,27 @@ function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
             palm: segment.palm
         };
     });
+    // 用实心掌面补足骨骼线之间的空隙，球不会再从掌心和指根之间穿过去。
+    liveHandState.palms.forEach((palm) => {
+        const predictedPalm = {
+            ...palm,
+            x: palm.x + Math.max(-900, Math.min(900, palm.vx)) * predictionSeconds,
+            y: palm.y + Math.max(-900, Math.min(900, palm.vy)) * predictionSeconds
+        };
+        const dx = center.x - predictedPalm.x;
+        const dy = center.y - predictedPalm.y;
+        const distance = Math.hypot(dx, dy);
+        const penetration = radius + predictedPalm.radius - distance;
+        nearestGap = Math.min(nearestGap, distance - radius - predictedPalm.radius);
+        if (penetration <= 0 || (best && penetration <= best.penetration)) return;
+        best = {
+            dx, dy, distance, penetration,
+            handVx: predictedPalm.vx,
+            handVy: predictedPalm.vy,
+            palm: true
+        };
+    });
+    ball.classList.toggle('hand-near', nearestGap < 42);
     if (!best) return false;
 
     // 限制关键点偶发跳变造成的异常高速，保留快速拍击力度但不让球瞬间飞出画面。
@@ -692,16 +779,17 @@ function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
     }
     state.touched = true;
     state.lastTouchedAt = frameTime;
+    state.directControlUntil = frameTime + 180;
 
-    if (impactSpeed > 52 && frameTime - (state.lastContactEffect || 0) > 105) {
+    if (impactSpeed > 14 && frameTime - (state.lastContactEffect || 0) > 72) {
         state.lastContactEffect = frameTime;
         ball.style.setProperty('--contact-angle', `${Math.atan2(ny, nx)}rad`);
-        ball.style.setProperty('--contact-strength', `${Math.min(.18, impactSpeed / 1800).toFixed(3)}`);
+        ball.style.setProperty('--contact-strength', `${Math.min(.28, .055 + impactSpeed / 1250).toFixed(3)}`);
         ball.classList.remove('physical-contact');
         void ball.offsetWidth;
         ball.classList.add('physical-contact');
-        window.setTimeout(() => ball.classList.remove('physical-contact'), 150);
-        createSoftParticles(ball, 'hit', impactSpeed > 210 ? 9 : 4);
+        window.setTimeout(() => ball.classList.remove('physical-contact'), 210);
+        createSoftParticles(ball, 'hit', impactSpeed > 210 ? 14 : impactSpeed > 80 ? 9 : 6);
         if (material.brittle && impactSpeed > 300) {
             const index = [...document.querySelectorAll('.video-gesture-ball')].indexOf(ball);
             explodeBall(ball, state, Math.max(0, index));
@@ -1265,7 +1353,11 @@ function animateVideoBalls(frameTime) {
             }
 
             applyGestureFields(state, size, elapsed, frameTime);
-            applyAutonomousBehavior(ball, state, size, elapsed, frameTime, index);
+            // 手直接接触后的短时间内，以手部输入为最高优先级，避免情绪漂移等自动力场
+            // 抵消刚刚发生的托举、拍击或拨动。
+            if (frameTime > (state.directControlUntil || 0)) {
+                applyAutonomousBehavior(ball, state, size, elapsed, frameTime, index);
+            }
             applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area);
             applyBodyCollision(state, size, frameTime);
             const physicalHandContact = resolvePhysicalHandContact(ball, state, size, material, frameTime);
@@ -1323,7 +1415,7 @@ function animateVideoBalls(frameTime) {
 
             state.x += state.vx * elapsed;
             state.y += state.vy * elapsed;
-            if (Math.hypot(state.vx, state.vy) > 210 && frameTime - state.lastTrail > 180) {
+            if (Math.hypot(state.vx, state.vy) > 210 && frameTime - state.lastTrail > 260) {
                 createMotionTrail(ball);
                 state.lastTrail = frameTime;
             }
@@ -1516,7 +1608,7 @@ function updateInteraction(hand, canvas, currentGesture, handPosition, allHands 
     const mappedY = mappedPoint.y;
 
     if (activeMode === 'ball') {
-        syncLiveHand(mappedX, mappedY, currentGesture, hand, canvas, rect);
+        syncLiveHand(mappedX, mappedY, currentGesture, hand, canvas, rect, allHands);
         updateDualHandField(allHands, canvas, rect);
         applyImmediateHandHit();
         updateAirHud(currentGesture);
@@ -1649,6 +1741,7 @@ function tryGrabObject(cursorX, cursorY) {
     const interactionArea = getInteractionArea(activeMode);
     if (!interactionArea) return;
 
+    const candidates = [];
     for (const obj of objects) {
         // 爆裂动画中的球体不可被抓取，等待重生。
         if (obj.classList.contains('exploding')) continue;
@@ -1669,36 +1762,33 @@ function tryGrabObject(cursorX, cursorY) {
 
         // 如果距离足够近，则抓取物品
         const grabRadius = obj.classList.contains('gesture-ball') ? Math.max(78, objRect.width * 1.12) : 58;
-        if (distance < grabRadius) {
-            const isVideoBall = obj.classList.contains('video-gesture-ball');
-            if (!isVideoBall) {
-                if (timer) clearTimeout(timer);
-                timer = setTimeout(() => {
-                    voice.synthesizeSpeechSentenceBySentence("抓取" + (obj.dataset.name || '收藏品'));
-                }, 500);
-            }
-
-            // 正确计算偏移量：光标位置 - 物品当前位置
-            grabOffset = {
-                x: cursorX - objLeft,
-                y: cursorY - objTop
-            };
-
-            grabbedObject = obj;
-            bringToFront(obj);
-            obj.classList.add('grabbing');
-            const ballState = ballStates.get(obj);
-            if (ballState) {
-                ballState.touched = true;
-                ballState.lastTouchedAt = performance.now();
-                ballState.moodChangedAt = performance.now();
-                setBallMood(obj, ballState, 'happy');
-            }
-            createSoftParticles(obj, 'grab');
-            if (!isVideoBall) showReaction(obj);
-            break;
-        }
+        if (distance < grabRadius) candidates.push({ obj, distance, objLeft, objTop });
     }
+    // 多球重叠时抓取最靠近捏合点的球，不再被 HTML 中排在前面的隐藏球抢走。
+    const target = candidates.sort((first, second) => first.distance - second.distance)[0];
+    if (!target) return;
+    const { obj, objLeft, objTop } = target;
+    const isVideoBall = obj.classList.contains('video-gesture-ball');
+    if (!isVideoBall) {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+            voice.synthesizeSpeechSentenceBySentence("抓取" + (obj.dataset.name || '收藏品'));
+        }, 500);
+    }
+    grabOffset = { x: cursorX - objLeft, y: cursorY - objTop };
+    grabbedObject = obj;
+    bringToFront(obj);
+    obj.classList.add('grabbing');
+    const ballState = ballStates.get(obj);
+    if (ballState) {
+        ballState.touched = true;
+        ballState.lastTouchedAt = performance.now();
+        ballState.moodChangedAt = performance.now();
+        ballState.directControlUntil = performance.now() + 220;
+        setBallMood(obj, ballState, 'happy');
+    }
+    createSoftParticles(obj, 'grab', 20);
+    if (!isVideoBall) showReaction(obj);
 }
 
 // 移动物品（手势抓取）
@@ -1821,6 +1911,10 @@ function resetInteraction() {
     endPointerDrag();
     removeCursor();
     liveHandState.active = false;
+    liveHandState.points = [];
+    liveHandState.segments = [];
+    liveHandState.palms = [];
+    physicalHandStates.clear();
     dualHandState.active = false;
     dualHandState.portalActive = false;
     fingerPath = [];
@@ -1833,4 +1927,16 @@ function resetInteraction() {
     popup?.setAttribute('aria-hidden', 'true');
 }
 
-export { updateInteraction, updateBodyPose, clearBodyPose, resetInteraction, resetVideoBalls, grabbedObject };
+function handleHandsMissing() {
+    // 容忍模型短暂漏掉一两帧；真正离开画面后再释放，既不粘球也不突然掉球。
+    if (performance.now() - liveHandState.updatedAt < 300) return;
+    liveHandState.active = false;
+    liveHandState.points = [];
+    liveHandState.segments = [];
+    liveHandState.palms = [];
+    physicalHandStates.clear();
+    document.querySelectorAll('.video-gesture-ball.hand-near').forEach(ball => ball.classList.remove('hand-near'));
+    if (!pointerDrag) releaseObject();
+}
+
+export { updateInteraction, updateBodyPose, clearBodyPose, resetInteraction, resetVideoBalls, handleHandsMissing, grabbedObject };

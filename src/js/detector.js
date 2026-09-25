@@ -1,6 +1,6 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
 import { drawHands, clearCanvas, createRenderContext } from './renderer.js';
-import { updateInteraction } from './interaction.js';
+import { updateInteraction, handleHandsMissing } from './interaction.js';
 import { recognizeAlphabet, fingerCountToLetter, countExtendedFingers } from './gesture-recognition.js';
 import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
 import { initSpeechSynthesis } from './voice.js';
@@ -17,6 +17,8 @@ const SMOOTH_WINDOW = 6;
 let leftCountHistory = [];
 let rightCountHistory = [];
 let lastSpokenLetter = '';
+let pinchMissFrames = 0;
+let missingHandFrames = 0;
 const letterVoice = initSpeechSynthesis();
 
 function pushWindow(list, value) {
@@ -110,11 +112,14 @@ function detectHands(video, canvas, detector) {
       clearCanvas(ctx, canvas);
 
       if (hands.length > 0) {
+        missingHandFrames = 0;
         // 绘制手部关键点
         drawHands(ctx, hands);
 
-        // 分析手势
-        analyzeGesture(hands[0]);
+        // 优先选择正在捏合的手作为主交互手。两只手都能抓球，避免模型调整
+        // Left / Right 返回顺序时，正在操作的手突然失去控制。
+        const interactionHand = selectInteractionHand(hands);
+        analyzeGesture(interactionHand);
         if (document.body.dataset.mode === 'letters') {
           analyzeLetters(hands);
         } else {
@@ -127,9 +132,14 @@ function detectHands(video, canvas, detector) {
         }
 
         // 更新交互
-        updateInteraction(hands[0], canvas, currentGesture, handPosition, hands);
+        updateInteraction(interactionHand, canvas, currentGesture, handPosition, hands);
       } else {
-        pinchActive = false;
+        missingHandFrames += 1;
+        // 短暂漏检不立即松球；连续漏检后才清空捏合状态。
+        if (missingHandFrames >= 3) {
+          pinchActive = false;
+          pinchMissFrames = 0;
+        }
         currentGesture = '未检测到手势';
         currentFingerCount = 0;
         currentLetter = '—';
@@ -144,6 +154,7 @@ function detectHands(video, canvas, detector) {
           code: 0,
           paired: false
         });
+        handleHandsMissing();
       }
 
       // 更新状态
@@ -198,9 +209,13 @@ function analyzeGesture(hand) {
     // 这样既适应手离镜头远近，也能吸收关键点的逐帧抖动。
     const pinchStartThreshold = Math.max(32, Math.min(72, palmWidth * .7));
     const pinchReleaseThreshold = Math.max(42, Math.min(88, palmWidth * .9));
-    const isPinching = pinchActive
+    const withinPinchRange = pinchActive
       ? distance < pinchReleaseThreshold
       : distance < pinchStartThreshold;
+    if (withinPinchRange) pinchMissFrames = 0;
+    else if (pinchActive) pinchMissFrames += 1;
+    // 连续三帧确认松开，吸收关键点偶发跳动，抓住的球不会无故掉落。
+    const isPinching = withinPinchRange || (pinchActive && pinchMissFrames < 3);
 
     const middleTip = hand.keypoints.find(k => k.name === 'middle_finger_tip');
     const middlePip = hand.keypoints.find(k => k.name === 'middle_finger_pip');
@@ -213,6 +228,7 @@ function analyzeGesture(hand) {
       currentGesture = '抓取手势';
     } else if (extendedCount === 0 || (currentGesture === '握拳吸引' && extendedCount <= 1 && !indexExtended)) {
       pinchActive = false;
+      pinchMissFrames = 0;
       currentGesture = '握拳吸引';
     } else if (indexExtended && !middleExtended) {
       pinchActive = false;
@@ -241,6 +257,22 @@ function analyzeGesture(hand) {
   }
 
   updateInteractionStatus(currentGesture);
+}
+
+function selectInteractionHand(hands) {
+  if (!hands?.length) return null;
+  const pinchingHand = hands.find((hand) => {
+    const thumb = hand.keypoints?.find(point => point.name === 'thumb_tip');
+    const index = hand.keypoints?.find(point => point.name === 'index_finger_tip');
+    const indexMcp = hand.keypoints?.find(point => point.name === 'index_finger_mcp');
+    const pinkyMcp = hand.keypoints?.find(point => point.name === 'pinky_finger_mcp');
+    if (!thumb || !index) return false;
+    const palmWidth = indexMcp && pinkyMcp
+      ? Math.hypot(indexMcp.x - pinkyMcp.x, indexMcp.y - pinkyMcp.y)
+      : 80;
+    return Math.hypot(thumb.x - index.x, thumb.y - index.y) < Math.max(34, Math.min(76, palmWidth * .74));
+  });
+  return pinchingHand || hands[0];
 }
 
 function analyzeLetters(hands) {

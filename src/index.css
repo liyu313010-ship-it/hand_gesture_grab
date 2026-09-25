@@ -256,7 +256,8 @@ h1 span { color: var(--yellow); }
 }
 video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 video { z-index: 1; transform: scaleX(-1); }
-canvas { z-index: 2; }
+/* 手部骨架置于球体上方，并允许鼠标事件穿透，形成手在前、球在后的空间关系。 */
+canvas { z-index: 7; pointer-events: none; }
 .video-placeholder {
   position: absolute;
   inset: 0;
@@ -666,6 +667,11 @@ body[data-mode='ball'] .interaction-section { display: none; }
 .gesture-ball.mood-playful { outline: 2px dotted rgba(255,255,255,.7); outline-offset: 3px; }
 .gesture-ball.mood-angry { outline: 3px solid rgba(255,62,62,.88); outline-offset: 3px; box-shadow: 0 0 34px rgba(255,45,45,.8); }
 .gesture-ball.mood-lonely { outline: 2px dotted rgba(150,185,220,.55); outline-offset: 4px; }
+.gesture-ball.hand-near {
+  outline: 2px solid rgba(108,229,193,.72);
+  outline-offset: 5px;
+  box-shadow: inset 9px 9px 19px rgba(255,255,255,.3), 0 0 0 5px rgba(108,229,193,.1), 0 0 34px var(--ball-glow);
+}
 .gesture-ball.physical-contact {
   border-radius: 45% 55% 48% 52%;
   box-shadow:
@@ -673,6 +679,8 @@ body[data-mode='ball'] .interaction-section { display: none; }
     inset 10px 10px 22px rgba(255,255,255,.26),
     0 0 34px var(--ball-glow),
     0 20px 34px rgba(0,0,0,.3);
+  transform: rotate(var(--contact-angle, 0rad)) scaleX(calc(1 - var(--contact-strength, .06))) scaleY(calc(1 + var(--contact-strength, .06)));
+  transition: transform .07s ease-out, box-shadow .1s ease-out;
 }
 .gesture-ball.physical-contact .ball-asset {
   transform: scale(calc(1 + var(--contact-strength, .06))) scaleY(calc(1 - var(--contact-strength, .06)));
@@ -781,7 +789,7 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   45% { transform: scale(1.28); opacity: .72; box-shadow: 0 0 55px rgba(255,255,255,.9); }
   100% { transform: scale(1); opacity: 1; }
 }
-.ball-particle-layer { position: absolute; inset: 0; z-index: 6; overflow: hidden; pointer-events: none; }
+.ball-particle-layer { position: absolute; inset: 0; z-index: 8; overflow: hidden; pointer-events: none; }
 .body-collider-line,
 .energy-rope {
   position: absolute;

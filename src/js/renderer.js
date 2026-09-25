@@ -50,6 +50,8 @@ const HAND_CONNECTIONS = [
 // 绘制手部关键点
 function drawHands(ctx, hands) {
   for (const hand of hands) {
+    // 半透明掌面覆盖在虚拟球上方，既标示真实碰撞区域，也形成球被手托住时的前后遮挡感。
+    drawPalmSurface(ctx, hand.keypoints);
     // 绘制连接线（先绘制线，再绘制点，这样点会在线上面）
     drawConnections(ctx, hand.keypoints);
     
@@ -100,6 +102,26 @@ function drawHands(ctx, hands) {
     //   ctx.fillText(`${hand.handedness}手 - 置信度: ${hand.score.toFixed(2)}`, 10, 20);
     // }
   }
+}
+
+function drawPalmSurface(ctx, keypoints) {
+  const pointMap = new Map(keypoints.map(point => [point.name, point]));
+  const outline = ['wrist', 'thumb_cmc', 'index_finger_mcp', 'middle_finger_mcp', 'ring_finger_mcp', 'pinky_finger_mcp']
+    .map(name => pointMap.get(name)).filter(Boolean);
+  if (outline.length < 5) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.moveTo(outline[0].x, outline[0].y);
+  outline.slice(1).forEach(point => ctx.lineTo(point.x, point.y));
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(108, 229, 193, .13)';
+  ctx.strokeStyle = 'rgba(255, 255, 255, .5)';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(108, 229, 193, .7)';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 // 绘制连接线
