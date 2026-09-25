@@ -12,26 +12,26 @@
   --blue: #71a7ff;
 }
 
-/* 球体模式使用手机式竖屏画面，让人物和双手拥有更充足的纵向活动空间。 */
+/* 球体模式占满主要工作区，让人物、双手和球体都有足够的活动范围。 */
 body[data-mode='ball'] .workspace {
   width: min(1180px, 100%);
   margin-inline: auto;
 }
 body[data-mode='ball'] .camera-section .video-container {
-  /* 使用更宽的3:4竖屏而不是细长9:16，并尽量吃满页面可用高度。 */
-  width: min(100%, calc((100vh - 305px) * 3 / 4), 500px);
+  /* 画面本身铺开到接近主面板宽度，而不是只放大外层白色容器。 */
+  width: min(100%, calc((100vh - 305px) * 1.9), 1160px);
   height: auto;
   min-height: 360px;
   max-height: none;
-  aspect-ratio: 3 / 4;
-  /* 不允许 flex 单独压扁高度，否则竖屏容器会退化成横向画面。 */
+  aspect-ratio: 1.9 / 1;
+  /* 不允许 flex 单独压扁高度。 */
   flex: 0 0 auto;
   align-self: center;
   margin-top: 10px;
 }
 body[data-mode='ball'] .video-container video,
 body[data-mode='ball'] .video-container canvas {
-  /* 竖框只裁去横屏设备多余的左右区域，保留人物完整的上下方向。 */
+  /* 摄像头与交互画布始终保持相同的填充方式。 */
   object-fit: cover;
 }
 
@@ -1162,9 +1162,9 @@ h1 span, .kicker, .stage-title span, .reaction-kicker { color: #080808; }
   .panel-sticker { top: -18px; width: 42px; height: 42px; }
 
   .video-container { height: clamp(270px, 36vh, 320px); border-radius: 13px; }
-  /* 低窗口高度下继续保留较大的3:4竖屏交互区。 */
+  /* 低窗口高度下按可用高度等比收缩，仍保留足够大的交互区。 */
   body[data-mode='ball'] .camera-section .video-container {
-    width: min(100%, calc((100vh - 235px) * 3 / 4), 500px);
+    width: min(100%, calc((100vh - 235px) * 1.9), 1160px);
   }
   /* 低窗口高度下压缩字母卡片与间距，给识别组件留出空间。 */
   .letter-mode-layer.active { gap: 6px; padding: 34px 14px; }

@@ -2,11 +2,11 @@ let isCameraOn = false;
 
 function getVideoConstraints(mode = 'letters') {
   if (mode === 'ball') {
-    // 球体模式优先请求手机式竖屏比例；不支持竖屏的电脑摄像头会自动回退到可用比例。
+    // 球体模式使用大尺寸交互画面，优先请求清晰的横屏视频。
     return {
-      width: { ideal: 720 },
-      height: { ideal: 960 },
-      aspectRatio: { ideal: 3 / 4 },
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      aspectRatio: { ideal: 16 / 9 },
       frameRate: { ideal: 30, min: 20 },
       facingMode: 'user'
     };
