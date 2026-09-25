@@ -1,8 +1,8 @@
 {
-  "name": "hand-gesture-grab",
+  "name": "airtouch",
   "private": true,
   "version": "0.0.0",
-  "description": "灵动手势收藏屋：TensorFlow.js双手A-Z识别与动态物品抓取交互",
+  "description": "灵触 AirTouch：基于TensorFlow.js与MediaPipe的实时手势交互应用",
   "author": "李雨",
   "type": "module",
   "scripts": {

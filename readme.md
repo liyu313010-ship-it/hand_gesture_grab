@@ -1,6 +1,6 @@
-# 灵动手势收藏屋
+# 灵触 AirTouch
 
-基于 TensorFlow.js 与 MediaPipe Hands 的浏览器端实时手势交互项目。
+灵触（AirTouch）是一款基于 TensorFlow.js 与 MediaPipe Hands 的浏览器端实时手势交互应用。
 
 - 项目维护者：李雨
 - 学号：420231159029
