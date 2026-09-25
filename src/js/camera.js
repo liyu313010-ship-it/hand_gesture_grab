@@ -5,8 +5,8 @@ function getVideoConstraints(mode = 'letters') {
     // 球体模式优先请求手机式竖屏比例；不支持竖屏的电脑摄像头会自动回退到可用比例。
     return {
       width: { ideal: 720 },
-      height: { ideal: 1280 },
-      aspectRatio: { ideal: 9 / 16 },
+      height: { ideal: 960 },
+      aspectRatio: { ideal: 3 / 4 },
       frameRate: { ideal: 30, min: 20 },
       facingMode: 'user'
     };
