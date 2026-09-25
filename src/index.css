@@ -600,7 +600,13 @@ body:not([data-mode='letters']) .encoding-tip { display: none; }
   transition: box-shadow .2s, filter .2s;
   contain: layout paint style;
 }
-.video-gesture-ball { z-index: 5; }
+.video-gesture-ball {
+  z-index: 5;
+  left: 0;
+  top: 0;
+  translate: var(--ball-x, 0px) var(--ball-y, -120px);
+  will-change: translate;
+}
 /* 彩球在球体模式且摄像头启动后才出现，未启动时画面保持占位提示。 */
 body[data-mode='ball'].camera-on .video-gesture-ball { display: grid; }
 /* 球体抓取模式：中间区域整体切换为全屏摄像头画面，Hero 与底部说明保持原样。 */

@@ -85,7 +85,9 @@ async function initDetector() {
     handPoseDetection.SupportedModels.MediaPipeHands, 
     {
       runtime: 'mediapipe',
-      modelType: 'full',
+      // lite模型在普通笔记本上能提供更稳定的实时帧率；后续的自适应平滑、
+      // 位置预测和掌宽阈值负责维持交互精度。
+      modelType: 'lite',
       maxHands: 2,
       // 稍微降低检测/跟踪门槛，改善手掌较远、靠近画面边缘或光线一般时的连续识别。
       minDetectionConfidence: 0.4,
@@ -106,8 +108,10 @@ function detectHands(video, canvas, detector) {
   async function detect() {
     try {
       // 检测手部 水平翻转检测结果
+      const inferenceStartedAt = performance.now();
       const hands = await detector.estimateHands(video, { flipHorizontal: true });
-      updateBodyTracking(video, canvas);
+      const handInferenceMs = performance.now() - inferenceStartedAt;
+      updateBodyTracking(video, canvas, handInferenceMs);
       // 清除画布
       clearCanvas(ctx, canvas);
 

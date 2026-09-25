@@ -2,10 +2,10 @@ let isCameraOn = false;
 
 function getVideoConstraints(mode = 'letters') {
   if (mode === 'ball') {
-    // 球体模式使用大尺寸交互画面，优先请求清晰的横屏视频。
+    // 960×540在大画面下仍足够清晰，同时显著降低双手模型每帧处理的像素量。
     return {
-      width: { ideal: 1280 },
-      height: { ideal: 720 },
+      width: { ideal: 960, max: 960 },
+      height: { ideal: 540, max: 540 },
       aspectRatio: { ideal: 16 / 9 },
       frameRate: { ideal: 30, min: 20 },
       facingMode: 'user'

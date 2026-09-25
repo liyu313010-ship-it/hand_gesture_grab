@@ -107,7 +107,9 @@ function applyBallLook(ball) {
     }
     // 球体大小每次刷洗都随机（画面里的球有大有小），素材显示比例随之变化（有的放大有的缩小），
     // 占比贴近球径，使素材最长边尽量贴着球体边缘。
-    ball.style.setProperty('--ball-size', `${58 + Math.random() * 34}px`);
+    const ballSize = 58 + Math.random() * 34;
+    ball.style.setProperty('--ball-size', `${ballSize}px`);
+    ball.dataset.physicsSize = ballSize.toFixed(2);
     ball.style.setProperty('--asset-scale', `${62 + Math.random() * 18}%`);
     let paletteIndex = Math.floor(Math.random() * BALL_PALETTE.length);
     if (String(paletteIndex) === ball.dataset.paletteIndex) {
@@ -217,6 +219,23 @@ function getInteractionArea(mode = getActiveMode()) {
 function ballColor(ball) {
     // 专用实色变量，供粒子、拖尾与冲击环使用，避免读取半透明的玻璃色。
     return getComputedStyle(ball).getPropertyValue('--ball-solid').trim() || '#ffffff';
+}
+
+function ballVisualMetrics(ball) {
+    const state = ballStates.get(ball);
+    const size = state?.size || Number(ball.dataset.physicsSize) || ball.offsetWidth || 80;
+    return {
+        x: state?.x ?? ball.offsetLeft,
+        y: state?.y ?? ball.offsetTop,
+        size
+    };
+}
+
+// 使用独立的 CSS translate 更新球体位置。translate 只触发合成，不再像 left/top 一样
+// 每帧重新计算布局；transform 仍可单独承担挤压、拉伸和弹跳动画。
+function renderBallPosition(ball, state) {
+    ball.style.setProperty('--ball-x', `${state.x}px`);
+    ball.style.setProperty('--ball-y', `${state.y}px`);
 }
 
 // 记录上一次写入的 HUD 文本；物理循环每帧都会调用本函数，值未变化时跳过 DOM 写入。
@@ -355,7 +374,8 @@ function closestPointOnSegment(point, a, b) {
 }
 
 function applyBodyCollision(state, size, frameTime) {
-    if (frameTime - liveBodyState.updatedAt > 380) return;
+    // 身体姿态低频更新，人体移动相对手指更慢，可在两次推理之间短时复用轮廓。
+    if (frameTime - liveBodyState.updatedAt > 1450) return;
     const center = { x: state.x + size / 2, y: state.y + size / 2 };
     const collisionDistance = size / 2 + 15;
     for (const segment of liveBodyState.segments) {
@@ -417,8 +437,9 @@ function createSoftParticles(ball, type = 'release', amount = 13) {
     amount = Math.min(amount, particleBudget);
     if (!amount) return;
 
-    const centerX = ball.offsetLeft + ball.offsetWidth / 2;
-    const centerY = ball.offsetTop + ball.offsetHeight / 2;
+    const metrics = ballVisualMetrics(ball);
+    const centerX = metrics.x + metrics.size / 2;
+    const centerY = metrics.y + metrics.size / 2;
     const color = ballColor(ball);
     for (let index = 0; index < amount; index += 1) {
         const particle = document.createElement('i');
@@ -444,10 +465,11 @@ function createMotionTrail(ball) {
     if (!layer) return;
     const trail = document.createElement('i');
     trail.className = 'ball-motion-trail';
-    trail.style.left = `${ball.offsetLeft + ball.offsetWidth / 2}px`;
-    trail.style.top = `${ball.offsetTop + ball.offsetHeight / 2}px`;
+    const metrics = ballVisualMetrics(ball);
+    trail.style.left = `${metrics.x + metrics.size / 2}px`;
+    trail.style.top = `${metrics.y + metrics.size / 2}px`;
     trail.style.setProperty('--particle-color', ballColor(ball));
-    trail.style.setProperty('--trail-size', `${Math.max(28, ball.offsetWidth * .72)}px`);
+    trail.style.setProperty('--trail-size', `${Math.max(28, metrics.size * .72)}px`);
     layer.appendChild(trail);
     trail.addEventListener('animationend', () => trail.remove(), { once: true });
 }
@@ -459,8 +481,9 @@ function createBurstParticles(ball, amount = 42) {
     const area = ball.closest('.video-container');
     if (!layer || !area) return;
 
-    const centerX = ball.offsetLeft + ball.offsetWidth / 2;
-    const centerY = ball.offsetTop + ball.offsetHeight / 2;
+    const metrics = ballVisualMetrics(ball);
+    const centerX = metrics.x + metrics.size / 2;
+    const centerY = metrics.y + metrics.size / 2;
     for (let index = 0; index < amount; index += 1) {
         const particle = document.createElement('i');
         const angle = (Math.PI * 2 * index) / amount + Math.random() * .45;
@@ -486,8 +509,9 @@ function createBlastRing(ball) {
     [0, 1].forEach((depth) => {
         const ring = document.createElement('i');
         ring.className = `ball-blast-ring${depth ? ' ring-secondary' : ''}`;
-        ring.style.left = `${ball.offsetLeft + ball.offsetWidth / 2}px`;
-        ring.style.top = `${ball.offsetTop + ball.offsetHeight / 2}px`;
+        const metrics = ballVisualMetrics(ball);
+        ring.style.left = `${metrics.x + metrics.size / 2}px`;
+        ring.style.top = `${metrics.y + metrics.size / 2}px`;
         ring.style.setProperty('--particle-color', ballColor(ball));
         layer.appendChild(ring);
         ring.addEventListener('animationend', () => ring.remove(), { once: true });
@@ -496,8 +520,7 @@ function createBlastRing(ball) {
 
 function pulseBall(ball, className = 'ball-bounce') {
     ball.classList.remove(className);
-    void ball.offsetWidth;
-    ball.classList.add(className);
+    requestAnimationFrame(() => ball.classList.add(className));
     window.setTimeout(() => ball.classList.remove(className), 360);
 }
 
@@ -786,8 +809,7 @@ function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
         ball.style.setProperty('--contact-angle', `${Math.atan2(ny, nx)}rad`);
         ball.style.setProperty('--contact-strength', `${Math.min(.28, .055 + impactSpeed / 1250).toFixed(3)}`);
         ball.classList.remove('physical-contact');
-        void ball.offsetWidth;
-        ball.classList.add('physical-contact');
+        requestAnimationFrame(() => ball.classList.add('physical-contact'));
         window.setTimeout(() => ball.classList.remove('physical-contact'), 210);
         createSoftParticles(ball, 'hit', impactSpeed > 210 ? 14 : impactSpeed > 80 ? 9 : 6);
         if (material.brittle && impactSpeed > 300) {
@@ -876,10 +898,11 @@ function applyImmediateHandHit() {
         if (ball.classList.contains('grabbing') || ball.classList.contains('exploding')) return;
         const state = ballStates.get(ball);
         if (!state || now - state.lastHit < 160) return;
-        const radius = ball.offsetWidth / 2;
+        const metrics = ballVisualMetrics(ball);
+        const radius = metrics.size / 2;
         // 使用当前绘制位置做命中检测，避免物理状态与像素取整产生偏差。
-        const ballX = ball.offsetLeft + radius;
-        const ballY = ball.offsetTop + radius;
+        const ballX = metrics.x + radius;
+        const ballY = metrics.y + radius;
         const contact = nearestLiveHandPoint(ballX, ballY, !isFingerPoke);
         const dx = ballX - contact.point.x;
         const dy = ballY - contact.point.y;
@@ -919,7 +942,7 @@ function initialiseBallState(ball, index, area, force = false) {
     if (state && !force) return state;
     // 先随机球体外观（素材、玻璃颜色与大小），再按新尺寸计算初始位置，避免尺寸与落点错位。
     applyBallLook(ball);
-    const size = ball.offsetWidth || 80;
+    const size = Number(ball.dataset.physicsSize) || 80;
     const spawn = Number(ball.dataset.spawn ?? .5);
     state = {
         x: Math.max(0, Math.min(area.clientWidth - size, spawn * area.clientWidth - size / 2)),
@@ -943,15 +966,14 @@ function initialiseBallState(ball, index, area, force = false) {
         touched: false
     };
     ballStates.set(ball, state);
-    ball.style.left = `${state.x}px`;
-    ball.style.top = `${state.y}px`;
+    renderBallPosition(ball, state);
     return state;
 }
 
 function respawnBall(ball, state, index, area) {
     // 每次从顶部重新飘落时更换球内素材、玻璃颜色与球体大小，让全部素材依次出现且球有大有小。
     applyBallLook(ball);
-    const size = ball.offsetWidth || 80;
+    const size = Number(ball.dataset.physicsSize) || 80;
     const lane = Number(ball.dataset.spawn ?? .5);
     const randomOffset = (Math.random() - .5) * area.clientWidth * .18;
     state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
@@ -975,8 +997,8 @@ function respawnBall(ball, state, index, area) {
     state.lastGoalCheck = 0;
     state.touched = false;
     ball.classList.remove('ball-respawn');
-    void ball.offsetWidth;
-    ball.classList.add('ball-respawn');
+    renderBallPosition(ball, state);
+    requestAnimationFrame(() => ball.classList.add('ball-respawn'));
     window.setTimeout(() => ball.classList.remove('ball-respawn'), 520);
 }
 
@@ -1090,8 +1112,9 @@ function checkAirGoal(ball, state, index, area, frameTime) {
     const goalRect = goal.getBoundingClientRect();
     const goalCenterX = goalRect.left - areaRect.left + goalRect.width / 2;
     const goalCenterY = goalRect.top - areaRect.top + goalRect.height / 2;
-    const ballCenterX = state.x + ball.offsetWidth / 2;
-    const ballCenterY = state.y + ball.offsetHeight / 2;
+    const ballSize = state.size || Number(ball.dataset.physicsSize) || 80;
+    const ballCenterX = state.x + ballSize / 2;
+    const ballCenterY = state.y + ballSize / 2;
     const normalizedDistance = Math.hypot(
         (ballCenterX - goalCenterX) / (goalRect.width / 2),
         (ballCenterY - goalCenterY) / (goalRect.height / 2)
@@ -1102,8 +1125,7 @@ function checkAirGoal(ball, state, index, area, frameTime) {
     updateAirHud('投入目标 · 得分 +1');
     createSoftParticles(ball, 'hit', 24);
     goal.classList.remove('goal-flash');
-    void goal.offsetWidth;
-    goal.classList.add('goal-flash');
+    requestAnimationFrame(() => goal.classList.add('goal-flash'));
     window.setTimeout(() => goal.classList.remove('goal-flash'), 680);
     respawnBall(ball, state, index, area);
     return true;
@@ -1323,13 +1345,11 @@ function animateVideoBalls(frameTime) {
         applyMagneticForces(balls, elapsed);
         balls.forEach((ball, index) => {
             const state = initialiseBallState(ball, index, area);
-            const size = ball.offsetWidth;
+            const size = state.size || Number(ball.dataset.physicsSize) || 80;
             if (size) state.size = size;
             state.material = ball.dataset.material || state.material || 'water';
             const material = materialById(state.material);
             if (ball.classList.contains('grabbing')) {
-                state.x = ball.offsetLeft;
-                state.y = ball.offsetTop;
                 // 记录抓取过程中的手速，释放瞬间自然继承为抛掷速度。
                 state.vx = Math.max(-520, Math.min(520, liveHandState.vx * .72));
                 state.vy = Math.max(-520, Math.min(520, liveHandState.vy * .72));
@@ -1434,8 +1454,7 @@ function animateVideoBalls(frameTime) {
                 // 不设置“地面”：球从画面底部自由离场并消失，再从顶部重新进入。
                 respawnBall(ball, state, index, area);
             }
-            ball.style.left = `${state.x}px`;
-            ball.style.top = `${state.y}px`;
+            renderBallPosition(ball, state);
         });
 
         resolveBallCollisions(balls, area, frameTime);
@@ -1443,8 +1462,7 @@ function animateVideoBalls(frameTime) {
         balls.forEach((ball) => {
             if (ball.classList.contains('grabbing') || ball.classList.contains('exploding')) return;
             const state = ballStates.get(ball);
-            ball.style.left = `${state.x}px`;
-            ball.style.top = `${state.y}px`;
+            renderBallPosition(ball, state);
         });
     }
     requestAnimationFrame(animateVideoBalls);
@@ -1469,9 +1487,10 @@ function nearestBallTo(x, y, maximumDistance = 110) {
     let nearest = null;
     let nearestDistance = maximumDistance;
     document.querySelectorAll('.video-gesture-ball').forEach((ball) => {
+        const metrics = ballVisualMetrics(ball);
         const distance = Math.hypot(
-            ball.offsetLeft + ball.offsetWidth / 2 - x,
-            ball.offsetTop + ball.offsetHeight / 2 - y
+            metrics.x + metrics.size / 2 - x,
+            metrics.y + metrics.size / 2 - y
         );
         if (distance < nearestDistance) {
             nearest = ball;
@@ -1511,8 +1530,9 @@ function splitBall(ball) {
         portalCooldown: 0
     };
     ballStates.set(clone, cloneState);
-    clone.style.left = `${cloneState.x}px`;
-    clone.style.top = `${cloneState.y}px`;
+    clone.dataset.physicsSize = childSize.toFixed(2);
+    renderBallPosition(ball, state);
+    renderBallPosition(clone, cloneState);
     createSoftParticles(ball, 'hit', 26);
     updateFieldHud('双手拉裂 · 一球分为两球', materialById(state.material).label);
 }
@@ -1566,7 +1586,8 @@ function updateTwoHandStretch(hands, canvas, area) {
     ball.style.setProperty('--stretch-scale-x', stretch.toFixed(3));
     ball.style.setProperty('--stretch-scale-y', Math.max(.72, 1 / Math.sqrt(stretch)).toFixed(3));
     ball.style.setProperty('--stretch-angle', `${angle.toFixed(1)}deg`);
-    moveObjectTo(ball, midpoint.x - ball.offsetWidth / 2, midpoint.y - ball.offsetHeight / 2);
+    const ballSize = ballStates.get(ball)?.size || Number(ball.dataset.physicsSize) || 80;
+    moveObjectTo(ball, midpoint.x - ballSize / 2, midpoint.y - ballSize / 2);
     const state = ballStates.get(ball);
     if (state) state.touched = true;
     updateAirHud('双手拉伸 · 松开即可抛出');
@@ -1803,11 +1824,24 @@ function moveObject(cursorX, cursorY) {
 function moveObjectTo(element, left, top) {
     const interactionArea = element.closest('.video-container') || document.querySelector('.interaction-area');
     // 物品的 left/top 相对内容盒定位，用 clientWidth/clientHeight 扣掉边框，避免贴边时压线。
-    const maxX = interactionArea.clientWidth - element.offsetWidth;
-    const maxY = interactionArea.clientHeight - element.offsetHeight;
+    const ballState = element.classList.contains('video-gesture-ball') ? ballStates.get(element) : null;
+    const elementWidth = ballState?.size || element.offsetWidth;
+    const elementHeight = ballState?.size || element.offsetHeight;
+    const maxX = interactionArea.clientWidth - elementWidth;
+    const maxY = interactionArea.clientHeight - elementHeight;
 
-    element.style.left = Math.max(0, Math.min(left, maxX)) + 'px';
-    element.style.top = Math.max(0, Math.min(top, maxY)) + 'px';
+    const nextX = Math.max(0, Math.min(left, maxX));
+    const nextY = Math.max(0, Math.min(top, maxY));
+    if (element.classList.contains('video-gesture-ball')) {
+        if (ballState) {
+            ballState.x = nextX;
+            ballState.y = nextY;
+            renderBallPosition(element, ballState);
+        }
+    } else {
+        element.style.left = nextX + 'px';
+        element.style.top = nextY + 'px';
+    }
 }
 
 // —— 鼠标/触屏拖拽：不依赖摄像头即可自由布置收藏品，与手势抓取互不干扰。 ——
@@ -1824,11 +1858,12 @@ function beginPointerDrag(event) {
 
     const area = object.closest('.video-container') || document.querySelector('.interaction-area');
     const areaRect = area.getBoundingClientRect();
+    const objectRect = object.getBoundingClientRect();
     pointerDrag = {
         element: object,
         area,
-        offsetX: event.clientX - areaRect.left - object.offsetLeft,
-        offsetY: event.clientY - areaRect.top - object.offsetTop
+        offsetX: event.clientX - objectRect.left,
+        offsetY: event.clientY - objectRect.top
     };
     bringToFront(object);
     object.classList.add('grabbing');

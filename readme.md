@@ -163,7 +163,7 @@ BlazePose Lite（球体模式按需加载）
 
 ### 摄像头与坐标映射
 
-`camera.js` 使用 `getUserMedia` 请求前置摄像头。视频和骨架Canvas使用相同尺寸；当页面通过 `object-fit: cover` 缩放视频时，交互层复算缩放比例和裁切偏移，把模型坐标准确映射到可见区域。切换模式时通过媒体轨道约束更新画面，不重复创建检测循环。
+`camera.js` 使用 `getUserMedia` 请求前置摄像头。球体模式采用兼顾清晰度和实时推理的960×540输入，视频和骨架Canvas使用相同尺寸；当页面通过 `object-fit: cover` 缩放视频时，交互层复算缩放比例和裁切偏移，把模型坐标准确映射到可见区域。切换模式时通过媒体轨道约束更新画面，不重复创建检测循环。
 
 ### 手势与字母识别
 
@@ -199,8 +199,10 @@ BlazePose Lite（球体模式按需加载）
 
 - MediaPipe Hands与BlazePose在浏览器中使用WebGL推理；初始化时主动申请 `powerPreference: high-performance` 的WebGL2/WebGL上下文并记录实际显卡渲染器。
 - 检测成功时 `body[data-compute-backend="webgl-gpu"]` 表示GPU路径可用；如果显示 `software-fallback`，需要在Chrome或Edge设置中开启“使用图形加速”。
-- Canvas请求低延迟 `desynchronized` 上下文；身体姿态模型采用更低频的按需推理，为双手检测、GIF解码和实时碰撞留出GPU时间。
-- 移动球体取消实时 `backdrop-filter`，使用透明渐变代替；粒子拖尾进行频率限制，降低GPU合成和DOM创建压力。
+- Hands采用轻量实时模型，再结合自适应关键点平滑和短时位置预测维持精度；Canvas请求低延迟 `desynchronized` 上下文。
+- BlazePose根据手部推理耗时自动判断设备余量，并以低频方式更新；性能紧张时优先保证双手碰撞和抓取响应。
+- 球体位置使用独立CSS `translate` 进入GPU合成管线，不再逐帧修改 `left/top` 触发布局；碰撞动画也不再读取布局来强制重播。
+- 移动球体取消实时 `backdrop-filter`，使用透明渐变代替；粒子设置数量预算并限制拖尾频率，降低GPU合成和DOM创建压力。
 
 ### 素材与界面层级
 
