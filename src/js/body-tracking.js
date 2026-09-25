@@ -39,7 +39,7 @@ function updateBodyTracking(video, canvas) {
   if (poseBusy) return;
   const now = performance.now();
   // 姿态模型低频运行，手部模型继续保持高帧率，兼顾身体碰撞与抓取响应。
-  if (now - lastPoseAt < 180) return;
+  if (now - lastPoseAt < 260) return;
   lastPoseAt = now;
   poseBusy = true;
   poseDetector.estimatePoses(video, { flipHorizontal: true })

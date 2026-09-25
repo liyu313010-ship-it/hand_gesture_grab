@@ -1,5 +1,5 @@
 import * as handPoseDetection from '@tensorflow-models/hand-pose-detection';
-import { drawHands, clearCanvas } from './renderer.js';
+import { drawHands, clearCanvas, createRenderContext } from './renderer.js';
 import { updateInteraction } from './interaction.js';
 import { recognizeAlphabet, fingerCountToLetter, countExtendedFingers } from './gesture-recognition.js';
 import { updateStatus, updateInteractionStatus, updateRecognitionStatus } from './utils.js';
@@ -56,6 +56,29 @@ function smoothRecognition(nextRecognition) {
 
 // 初始化检测器
 async function initDetector() {
+  // MediaPipe浏览器运行时通过WebGL执行模型推理。主动申请高性能上下文并记录实际GPU；
+  // 若浏览器关闭了硬件加速则标记为软件回退，便于直接定位卡顿原因。
+  const probe = document.createElement('canvas');
+  const gl = probe.getContext('webgl2', { powerPreference: 'high-performance', antialias: false }) ||
+    probe.getContext('webgl', { powerPreference: 'high-performance', antialias: false });
+  if (gl) {
+    const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+    document.body.dataset.computeBackend = 'webgl-gpu';
+    document.body.dataset.gpuRenderer = debugInfo
+      ? gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+      : 'WebGL hardware acceleration';
+    const computeChip = document.querySelector('.camera-section .model-chip');
+    if (computeChip) {
+      computeChip.textContent = '21 KEYPOINTS · GPU';
+      computeChip.title = document.body.dataset.gpuRenderer;
+    }
+    console.info(`GPU加速已启用：${document.body.dataset.gpuRenderer}`);
+  } else {
+    document.body.dataset.computeBackend = 'software-fallback';
+    const computeChip = document.querySelector('.camera-section .model-chip');
+    if (computeChip) computeChip.textContent = '21 KEYPOINTS · CPU';
+    console.warn('WebGL不可用，浏览器正在使用软件回退；请在浏览器设置中开启硬件加速。');
+  }
   detector = await handPoseDetection.createDetector(
     handPoseDetection.SupportedModels.MediaPipeHands, 
     {
@@ -76,7 +99,7 @@ async function initDetector() {
 function detectHands(video, canvas, detector) {
   let animationId;
   
-  const ctx = canvas.getContext('2d');
+  const ctx = createRenderContext(canvas);
   
   async function detect() {
     try {

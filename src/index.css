@@ -585,18 +585,19 @@ body:not([data-mode='letters']) .encoding-tip { display: none; }
      因为毛玻璃元素在“常驻合成层 + 每帧位移”时会触发部分 GPU 驱动整屏闪烁。 */
   background:
     radial-gradient(circle at 27% 19%, rgba(255,255,255,.98) 0 5%, rgba(255,255,255,.62) 8%, transparent 20%),
-    radial-gradient(circle at 38% 34%, color-mix(in srgb, var(--ball-solid, #5ad8ff) 35%, white) 0 12%, var(--ball-solid, #5ad8ff) 46%, color-mix(in srgb, var(--ball-solid, #5ad8ff) 58%, #050816) 100%);
-  backdrop-filter: blur(2px);
+    radial-gradient(circle at 38% 34%, rgba(255,255,255,.3) 0 12%, transparent 42%),
+    radial-gradient(circle at 50% 58%, var(--ball-tint, rgba(90,216,255,.22)) 0 38%, color-mix(in srgb, var(--ball-solid, #5ad8ff) 18%, transparent) 72%, rgba(5,8,18,.16) 100%);
   box-shadow:
-    inset -14px -16px 26px rgba(6,12,24,.3),
-    inset 10px 10px 22px rgba(255,255,255,.32),
-    0 0 24px var(--ball-glow, rgba(255,255,255,.45)),
-    0 18px 30px rgba(0,0,0,.28);
+    inset -12px -14px 22px rgba(6,12,24,.18),
+    inset 9px 9px 18px rgba(255,255,255,.26),
+    0 0 18px var(--ball-glow, rgba(255,255,255,.35)),
+    0 14px 24px rgba(0,0,0,.2);
   color: #fff;
   cursor: grab;
   user-select: none;
   touch-action: none;
   transition: box-shadow .2s, filter .2s;
+  contain: layout paint style;
 }
 .video-gesture-ball { z-index: 5; }
 /* 彩球在球体模式且摄像头启动后才出现，未启动时画面保持占位提示。 */
@@ -605,12 +606,12 @@ body[data-mode='ball'].camera-on .video-gesture-ball { display: grid; }
 body[data-mode='ball'] .workspace { grid-template-columns: minmax(0, 1fr); }
 body[data-mode='ball'] .interaction-section { display: none; }
 /* 球体配色：--ball-size 仅为脚本初始化前（首屏瞬间）的兜底尺寸，进入球体模式后由脚本随机覆盖。 */
-.ball-coral { --ball-size: 88px; --ball-tint: rgba(255,94,90,.5); --ball-glow: rgba(255,83,105,.5); --ball-solid: #ff5e5a; }
-.ball-cyan { --ball-size: 72px; --ball-tint: rgba(45,206,235,.5); --ball-glow: rgba(38,221,239,.48); --ball-solid: #2dceeb; }
-.ball-violet { --ball-size: 96px; --ball-tint: rgba(170,105,255,.5); --ball-glow: rgba(166,91,255,.5); --ball-solid: #aa69ff; }
-.ball-lime { --ball-size: 66px; --ball-tint: rgba(150,225,95,.5); --ball-glow: rgba(123,226,92,.46); --ball-solid: #96e15f; }
-.ball-amber { --ball-size: 80px; --ball-tint: rgba(255,200,87,.5); --ball-glow: rgba(255,196,72,.5); --ball-solid: #ffc857; }
-.ball-sky { --ball-size: 76px; --ball-tint: rgba(113,167,255,.5); --ball-glow: rgba(104,158,255,.5); --ball-solid: #71a7ff; }
+.ball-coral { --ball-size: 88px; --ball-tint: rgba(255,94,90,.22); --ball-glow: rgba(255,83,105,.38); --ball-solid: #ff5e5a; }
+.ball-cyan { --ball-size: 72px; --ball-tint: rgba(45,206,235,.22); --ball-glow: rgba(38,221,239,.36); --ball-solid: #2dceeb; }
+.ball-violet { --ball-size: 96px; --ball-tint: rgba(170,105,255,.22); --ball-glow: rgba(166,91,255,.38); --ball-solid: #aa69ff; }
+.ball-lime { --ball-size: 66px; --ball-tint: rgba(150,225,95,.22); --ball-glow: rgba(123,226,92,.34); --ball-solid: #96e15f; }
+.ball-amber { --ball-size: 80px; --ball-tint: rgba(255,200,87,.22); --ball-glow: rgba(255,196,72,.38); --ball-solid: #ffc857; }
+.ball-sky { --ball-size: 76px; --ball-tint: rgba(113,167,255,.22); --ball-glow: rgba(104,158,255,.36); --ball-solid: #71a7ff; }
 .gesture-ball::after {
   content: '';
   position: absolute;
@@ -630,7 +631,8 @@ body[data-mode='ball'] .interaction-section { display: none; }
   height: var(--asset-scale, 72%);
   object-fit: contain;
   border-radius: 22%;
-  filter: drop-shadow(0 4px 9px rgba(0,0,0,.35));
+  opacity: 1;
+  filter: saturate(1) drop-shadow(0 4px 9px rgba(0,0,0,.35));
   pointer-events: none;
 }
 .ball-highlight { position: absolute; z-index: 2; top: 12%; left: 17%; width: 33%; height: 21%; border-radius: 50%; background: rgba(255,255,255,.72); filter: blur(2.5px); pointer-events: none; }
@@ -657,13 +659,13 @@ body[data-mode='ball'] .interaction-section { display: none; }
 .gesture-ball.material-glass { border-width: 2px; background-color: rgba(255,255,255,.2); filter: contrast(1.08); }
 .gesture-ball.material-fire { box-shadow: inset 0 -18px 30px rgba(255,70,20,.48), 0 0 32px #ff7038, 0 -14px 30px rgba(255,192,72,.52); animation: material-fire-pulse .7s ease-in-out infinite alternate; }
 .gesture-ball.material-magnet { outline: 2px dashed rgba(255,255,255,.72); outline-offset: 3px; }
-.gesture-ball.material-bubble { opacity: .82; border-width: 2px; box-shadow: inset 9px 8px 17px rgba(255,255,255,.46), 0 0 22px rgba(170,230,255,.72); }
+.gesture-ball.material-bubble { border-width: 2px; box-shadow: inset 9px 8px 17px rgba(255,255,255,.34), 0 0 20px rgba(170,230,255,.55); }
 .gesture-ball.mood-curious { outline: 2px solid rgba(110,235,255,.5); outline-offset: 2px; }
-.gesture-ball.mood-shy { opacity: .76; }
+.gesture-ball.mood-shy { outline: 1px dashed rgba(255,255,255,.58); outline-offset: 4px; }
 .gesture-ball.mood-happy { box-shadow: inset 10px 10px 22px rgba(255,255,255,.4), 0 0 30px var(--ball-glow); }
 .gesture-ball.mood-playful { outline: 2px dotted rgba(255,255,255,.7); outline-offset: 3px; }
 .gesture-ball.mood-angry { outline: 3px solid rgba(255,62,62,.88); outline-offset: 3px; box-shadow: 0 0 34px rgba(255,45,45,.8); }
-.gesture-ball.mood-lonely { opacity: .66; filter: grayscale(.55); }
+.gesture-ball.mood-lonely { outline: 2px dotted rgba(150,185,220,.55); outline-offset: 4px; }
 .gesture-ball.physical-contact {
   border-radius: 45% 55% 48% 52%;
   box-shadow:

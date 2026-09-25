@@ -3,6 +3,11 @@ function clearCanvas(ctx, canvas) {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
+// 低延迟2D上下文减少摄像头骨架绘制等待；实际模型推理由MediaPipe WebGL完成。
+function createRenderContext(canvas) {
+  return canvas.getContext('2d', { alpha: true, desynchronized: true });
+}
+
 // 手部关键点连接定义
 const HAND_CONNECTIONS = [
   // 手腕到拇指
@@ -243,5 +248,6 @@ export {
   drawConnections, 
   drawFingerConnections, 
   drawHandOutline,
+  createRenderContext,
   HAND_CONNECTIONS 
 };

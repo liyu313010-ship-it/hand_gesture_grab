@@ -49,15 +49,15 @@ function takeBallAsset() {
 
 // 五颜六色的毛玻璃球体配色：每次飘落重生都为球随机换一种玻璃颜色。
 const BALL_PALETTE = [
-    { tint: 'rgba(255, 94, 90, .5)', glow: 'rgba(255, 83, 105, .5)', solid: '#ff5e5a' },
-    { tint: 'rgba(45, 206, 235, .5)', glow: 'rgba(38, 221, 239, .48)', solid: '#2dceeb' },
-    { tint: 'rgba(170, 105, 255, .5)', glow: 'rgba(166, 91, 255, .5)', solid: '#aa69ff' },
-    { tint: 'rgba(150, 225, 95, .5)', glow: 'rgba(123, 226, 92, .46)', solid: '#96e15f' },
-    { tint: 'rgba(255, 196, 84, .52)', glow: 'rgba(255, 190, 70, .48)', solid: '#ffc454' },
-    { tint: 'rgba(255, 118, 212, .5)', glow: 'rgba(255, 105, 215, .48)', solid: '#ff76d4' },
-    { tint: 'rgba(96, 158, 255, .5)', glow: 'rgba(80, 150, 255, .48)', solid: '#609eff' },
-    { tint: 'rgba(94, 226, 178, .5)', glow: 'rgba(94, 227, 171, .46)', solid: '#5ee2b2' },
-    { tint: 'rgba(255, 146, 70, .5)', glow: 'rgba(255, 140, 60, .48)', solid: '#ff9246' }
+    { tint: 'rgba(255, 94, 90, .22)', glow: 'rgba(255, 83, 105, .38)', solid: '#ff5e5a' },
+    { tint: 'rgba(45, 206, 235, .22)', glow: 'rgba(38, 221, 239, .36)', solid: '#2dceeb' },
+    { tint: 'rgba(170, 105, 255, .22)', glow: 'rgba(166, 91, 255, .38)', solid: '#aa69ff' },
+    { tint: 'rgba(150, 225, 95, .22)', glow: 'rgba(123, 226, 92, .34)', solid: '#96e15f' },
+    { tint: 'rgba(255, 196, 84, .22)', glow: 'rgba(255, 190, 70, .36)', solid: '#ffc454' },
+    { tint: 'rgba(255, 118, 212, .22)', glow: 'rgba(255, 105, 215, .36)', solid: '#ff76d4' },
+    { tint: 'rgba(96, 158, 255, .22)', glow: 'rgba(80, 150, 255, .36)', solid: '#609eff' },
+    { tint: 'rgba(94, 226, 178, .22)', glow: 'rgba(94, 227, 171, .34)', solid: '#5ee2b2' },
+    { tint: 'rgba(255, 146, 70, .22)', glow: 'rgba(255, 140, 60, .36)', solid: '#ff9246' }
 ];
 
 // 六种数字材质共享同一套手势，但拥有不同重力、阻尼、弹性与特殊行为。
@@ -837,7 +837,7 @@ function initialiseBallState(ball, index, area, force = false) {
         x: Math.max(0, Math.min(area.clientWidth - size, spawn * area.clientWidth - size / 2)),
         y: -size - index * 68,
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
-        vy: 16 + index * 6,
+        vy: 24 + index * 9,
         size,
         material: ball.dataset.material || 'water',
         mood: ball.dataset.mood || 'calm',
@@ -869,7 +869,7 @@ function respawnBall(ball, state, index, area) {
     state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
     state.y = -size - 24 - index * 18;
     state.vx = (Math.random() - .5) * 86;
-    state.vy = 17 + Math.random() * 12;
+    state.vy = 25.5 + Math.random() * 18;
     state.size = size;
     state.material = ball.dataset.material || 'water';
     state.mood = ball.dataset.mood || 'calm';
@@ -1254,8 +1254,8 @@ function animateVideoBalls(frameTime) {
             if (ball.classList.contains('exploding')) return;
 
             // 适度提高重力和终端速度，保持可抓取时间的同时让球体下落更有节奏。
-            const gravity = 114 * material.gravity;
-            state.vy = Math.min(state.vy + gravity * elapsed, material.id === 'bubble' ? 66 : 148);
+            const gravity = 171 * material.gravity;
+            state.vy = Math.min(state.vy + gravity * elapsed, material.id === 'bubble' ? 99 : 222);
             const drag = Math.pow(material.drag, elapsed * 60);
             state.vx *= drag;
             state.vy *= drag;
@@ -1323,7 +1323,7 @@ function animateVideoBalls(frameTime) {
 
             state.x += state.vx * elapsed;
             state.y += state.vy * elapsed;
-            if (Math.hypot(state.vx, state.vy) > 185 && frameTime - state.lastTrail > 110) {
+            if (Math.hypot(state.vx, state.vy) > 210 && frameTime - state.lastTrail > 180) {
                 createMotionTrail(ball);
                 state.lastTrail = frameTime;
             }
