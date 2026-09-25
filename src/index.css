@@ -80,9 +80,34 @@ body {
   width: min(1420px, 100%);
   margin-left: auto;
   margin-right: auto;
+  position: relative;
+  z-index: 1;
 }
 .hero { position: relative; }
 .decor { object-fit: contain; pointer-events: none; user-select: none; }
+/* 球体模式的墙面贴纸只装饰页面留白，层级低于主面板，因此不会遮挡摄像头。 */
+.ball-wall-stickers { display: none; }
+body[data-mode='ball'] .ball-wall-stickers {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ball-wall-stickers img {
+  position: absolute;
+  width: clamp(74px, 7vw, 126px);
+  height: clamp(74px, 7vw, 126px);
+  object-fit: contain;
+  opacity: .2;
+  filter: grayscale(1) contrast(1.25) drop-shadow(0 9px 9px rgba(0,0,0,.1));
+}
+.ball-wall-stickers img:nth-child(1) { left: 2.2%; top: 17%; transform: rotate(-12deg); }
+.ball-wall-stickers img:nth-child(2) { left: 5.5%; bottom: 9%; transform: rotate(8deg) scale(.88); }
+.ball-wall-stickers img:nth-child(3) { right: 2.4%; top: 20%; transform: rotate(11deg); }
+.ball-wall-stickers img:nth-child(4) { right: 5.8%; bottom: 8%; transform: rotate(-8deg) scale(.9); }
+.ball-wall-stickers img:nth-child(5) { right: 13%; top: 4%; transform: rotate(5deg) scale(.72); opacity: .14; }
 /* 右上角成双素材带：左侧是双狗单素材，右侧是 18/19 同款动作两两紧挨的成对素材。 */
 .meme-strip {
   position: absolute;
@@ -780,24 +805,48 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   width: var(--particle-size, 8px);
   height: var(--particle-size, 8px);
   border-radius: 50%;
-  background: var(--particle-color, #fff);
-  box-shadow: 0 0 10px var(--particle-color, #fff);
+  background: radial-gradient(circle at 35% 30%, #fff 0 18%, var(--particle-color, #fff) 42%, transparent 74%);
+  box-shadow: 0 0 7px #fff, 0 0 16px var(--particle-color, #fff), 0 0 30px color-mix(in srgb, var(--particle-color, #fff) 68%, transparent);
   opacity: 0;
+  mix-blend-mode: screen;
+  filter: saturate(1.25);
   transform: translate(-50%, -50%) scale(.4);
   animation: soft-particle-release .72s cubic-bezier(.18,.7,.24,1) forwards;
+  animation-delay: var(--particle-delay, 0ms);
+}
+.soft-particle::after {
+  content: '';
+  position: absolute;
+  inset: 28%;
+  border-radius: inherit;
+  background: #fff;
+  box-shadow: 0 0 8px #fff;
+}
+.soft-particle.is-spark {
+  border-radius: 2px;
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+}
+.soft-particle.is-streak {
+  width: calc(var(--particle-size, 8px) * 2.8);
+  height: max(2px, calc(var(--particle-size, 8px) * .28));
+  border-radius: 999px;
+  transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scaleX(.35);
 }
 .soft-particle.is-grab { animation-name: soft-particle-grab; }
 .soft-particle.is-burst { animation-name: soft-particle-burst; animation-duration: .92s; }
 .ball-motion-trail {
   position: absolute;
-  width: 24px;
-  height: 24px;
-  border: 2px solid var(--particle-color, #fff);
+  width: var(--trail-size, 34px);
+  height: var(--trail-size, 34px);
+  border: 1px solid rgba(255,255,255,.76);
   border-radius: 50%;
-  box-shadow: 0 0 16px var(--particle-color, #fff);
+  background: radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--particle-color, #fff) 22%, transparent) 62%, transparent 74%);
+  box-shadow: 0 0 12px #fff, 0 0 28px var(--particle-color, #fff), inset 0 0 18px var(--particle-color, #fff);
+  mix-blend-mode: screen;
   transform: translate(-50%, -50%);
-  animation: ball-trail-fade .48s ease-out forwards;
+  animation: ball-trail-fade .62s ease-out forwards;
 }
+.ball-motion-trail::after { content: ''; position: absolute; inset: 20%; border: 1px dashed rgba(255,255,255,.62); border-radius: 50%; }
 /* 爆裂冲击环：从爆裂点快速扩散的亮环。 */
 .ball-blast-ring {
   position: absolute;
@@ -805,24 +854,26 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   height: 30px;
   border: 3px solid var(--particle-color, #fff);
   border-radius: 50%;
-  box-shadow: 0 0 22px var(--particle-color, #fff), inset 0 0 12px var(--particle-color, #fff);
+  box-shadow: 0 0 12px #fff, 0 0 28px var(--particle-color, #fff), 0 0 54px var(--particle-color, #fff), inset 0 0 16px var(--particle-color, #fff);
+  mix-blend-mode: screen;
   transform: translate(-50%, -50%);
   animation: ball-blast-out .52s cubic-bezier(.15,.65,.28,1) forwards;
 }
+.ball-blast-ring.ring-secondary { border-width: 1px; animation-delay: 90ms; filter: hue-rotate(48deg); }
 @keyframes soft-particle-release {
-  0% { opacity: .9; transform: translate(-50%, -50%) scale(.45); }
+  0% { opacity: .95; transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scale(.35); }
   62% { opacity: .7; }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.25); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) rotate(var(--particle-rotate, 0deg)) scale(1.35); }
 }
 @keyframes soft-particle-grab {
-  0% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.1); }
+  0% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) rotate(var(--particle-rotate, 0deg)) scale(1.1); }
   35% { opacity: .82; }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(.25); }
+  100% { opacity: 0; transform: translate(-50%, -50%) rotate(calc(var(--particle-rotate, 0deg) + 120deg)) scale(.18); }
 }
 @keyframes soft-particle-burst {
-  0% { opacity: 1; transform: translate(-50%, -50%) scale(.5); }
+  0% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scale(.45); }
   70% { opacity: .85; }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) scale(1.55); }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) rotate(calc(var(--particle-rotate, 0deg) + 90deg)) scale(1.65); }
 }
 @keyframes ball-blast-out {
   from { opacity: .95; transform: translate(-50%, -50%) scale(.5); }

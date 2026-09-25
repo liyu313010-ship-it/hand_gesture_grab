@@ -408,13 +408,16 @@ function createSoftParticles(ball, type = 'release', amount = 13) {
         const particle = document.createElement('i');
         const angle = (Math.PI * 2 * index) / amount + Math.random() * .35;
         const distance = 30 + Math.random() * (type === 'hit' ? 58 : 42);
-        particle.className = `soft-particle${type === 'grab' ? ' is-grab' : ''}`;
+        const particleKind = index % 4 === 0 ? ' is-streak' : index % 3 === 0 ? ' is-spark' : '';
+        particle.className = `soft-particle${type === 'grab' ? ' is-grab' : ''}${particleKind}`;
         particle.style.left = `${centerX}px`;
         particle.style.top = `${centerY}px`;
         particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
         particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
         particle.style.setProperty('--particle-size', `${4 + Math.random() * 7}px`);
         particle.style.setProperty('--particle-color', color);
+        particle.style.setProperty('--particle-rotate', `${Math.round(angle * 180 / Math.PI)}deg`);
+        particle.style.setProperty('--particle-delay', `${Math.random() * 80}ms`);
         layer.appendChild(particle);
         particle.addEventListener('animationend', () => particle.remove(), { once: true });
     }
@@ -428,6 +431,7 @@ function createMotionTrail(ball) {
     trail.style.left = `${ball.offsetLeft + ball.offsetWidth / 2}px`;
     trail.style.top = `${ball.offsetTop + ball.offsetHeight / 2}px`;
     trail.style.setProperty('--particle-color', ballColor(ball));
+    trail.style.setProperty('--trail-size', `${Math.max(28, ball.offsetWidth * .72)}px`);
     layer.appendChild(trail);
     trail.addEventListener('animationend', () => trail.remove(), { once: true });
 }
@@ -445,13 +449,15 @@ function createBurstParticles(ball, amount = 42) {
         const particle = document.createElement('i');
         const angle = (Math.PI * 2 * index) / amount + Math.random() * .45;
         const distance = 65 + Math.random() * 135;
-        particle.className = 'soft-particle is-burst';
+        particle.className = `soft-particle is-burst${index % 3 === 0 ? ' is-streak' : index % 2 === 0 ? ' is-spark' : ''}`;
         particle.style.left = `${centerX}px`;
         particle.style.top = `${centerY}px`;
         particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
         particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
         particle.style.setProperty('--particle-size', `${5 + Math.random() * 8}px`);
         particle.style.setProperty('--particle-color', BURST_COLORS[index % BURST_COLORS.length]);
+        particle.style.setProperty('--particle-rotate', `${Math.round(angle * 180 / Math.PI)}deg`);
+        particle.style.setProperty('--particle-delay', `${Math.random() * 90}ms`);
         layer.appendChild(particle);
         particle.addEventListener('animationend', () => particle.remove(), { once: true });
     }
@@ -461,13 +467,15 @@ function createBurstParticles(ball, amount = 42) {
 function createBlastRing(ball) {
     const layer = document.querySelector('.ball-particle-layer');
     if (!layer) return;
-    const ring = document.createElement('i');
-    ring.className = 'ball-blast-ring';
-    ring.style.left = `${ball.offsetLeft + ball.offsetWidth / 2}px`;
-    ring.style.top = `${ball.offsetTop + ball.offsetHeight / 2}px`;
-    ring.style.setProperty('--particle-color', ballColor(ball));
-    layer.appendChild(ring);
-    ring.addEventListener('animationend', () => ring.remove(), { once: true });
+    [0, 1].forEach((depth) => {
+        const ring = document.createElement('i');
+        ring.className = `ball-blast-ring${depth ? ' ring-secondary' : ''}`;
+        ring.style.left = `${ball.offsetLeft + ball.offsetWidth / 2}px`;
+        ring.style.top = `${ball.offsetTop + ball.offsetHeight / 2}px`;
+        ring.style.setProperty('--particle-color', ballColor(ball));
+        layer.appendChild(ring);
+        ring.addEventListener('animationend', () => ring.remove(), { once: true });
+    });
 }
 
 function pulseBall(ball, className = 'ball-bounce') {
@@ -707,7 +715,7 @@ function initialiseBallState(ball, index, area, force = false) {
         x: Math.max(0, Math.min(area.clientWidth - size, spawn * area.clientWidth - size / 2)),
         y: -size - index * 68,
         vx: (index % 2 ? -1 : 1) * (24 + index * 7),
-        vy: 10 + index * 5,
+        vy: 16 + index * 6,
         size,
         material: ball.dataset.material || 'water',
         mood: ball.dataset.mood || 'calm',
@@ -738,7 +746,7 @@ function respawnBall(ball, state, index, area) {
     state.x = Math.max(0, Math.min(area.clientWidth - size, lane * area.clientWidth - size / 2 + randomOffset));
     state.y = -size - 24 - index * 18;
     state.vx = (Math.random() - .5) * 86;
-    state.vy = 10 + Math.random() * 9;
+    state.vy = 17 + Math.random() * 12;
     state.size = size;
     state.material = ball.dataset.material || 'water';
     state.mood = ball.dataset.mood || 'calm';
@@ -1121,9 +1129,9 @@ function animateVideoBalls(frameTime) {
             // 爆裂动画期间暂停物理，等待重生。
             if (ball.classList.contains('exploding')) return;
 
-            // 较缓的重力和终端速度，为摄像头手势托举、拍击与抓取留出反应时间。
-            const gravity = 95 * material.gravity;
-            state.vy = Math.min(state.vy + gravity * elapsed, material.id === 'bubble' ? 54 : 125);
+            // 适度提高重力和终端速度，保持可抓取时间的同时让球体下落更有节奏。
+            const gravity = 114 * material.gravity;
+            state.vy = Math.min(state.vy + gravity * elapsed, material.id === 'bubble' ? 66 : 148);
             const drag = Math.pow(material.drag, elapsed * 60);
             state.vx *= drag;
             state.vy *= drag;
