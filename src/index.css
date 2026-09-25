@@ -85,9 +85,8 @@ body {
 }
 .hero { position: relative; }
 .decor { object-fit: contain; pointer-events: none; user-select: none; }
-/* 球体模式的墙面贴纸只装饰页面留白，层级低于主面板，因此不会遮挡摄像头。 */
-.ball-wall-stickers { display: none; }
-body[data-mode='ball'] .ball-wall-stickers {
+/* 全部模式共享的墙面贴纸，只装饰页面留白；层级低于主面板，因此不会遮挡摄像头或组件。 */
+.ball-wall-stickers {
   position: fixed;
   inset: 0;
   z-index: 0;
