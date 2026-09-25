@@ -100,14 +100,14 @@ body[data-mode='ball'] .ball-wall-stickers {
   width: clamp(74px, 7vw, 126px);
   height: clamp(74px, 7vw, 126px);
   object-fit: contain;
-  opacity: .2;
-  filter: grayscale(1) contrast(1.25) drop-shadow(0 9px 9px rgba(0,0,0,.1));
+  opacity: .32;
+  filter: saturate(1.08) contrast(1.04) drop-shadow(0 9px 9px rgba(0,0,0,.1));
 }
 .ball-wall-stickers img:nth-child(1) { left: 2.2%; top: 17%; transform: rotate(-12deg); }
 .ball-wall-stickers img:nth-child(2) { left: 5.5%; bottom: 9%; transform: rotate(8deg) scale(.88); }
 .ball-wall-stickers img:nth-child(3) { right: 2.4%; top: 20%; transform: rotate(11deg); }
 .ball-wall-stickers img:nth-child(4) { right: 5.8%; bottom: 8%; transform: rotate(-8deg) scale(.9); }
-.ball-wall-stickers img:nth-child(5) { right: 13%; top: 4%; transform: rotate(5deg) scale(.72); opacity: .14; }
+.ball-wall-stickers img:nth-child(5) { right: 13%; top: 4%; transform: rotate(5deg) scale(.72); opacity: .24; }
 /* 右上角成双素材带：左侧是双狗单素材，右侧是 18/19 同款动作两两紧挨的成对素材。 */
 .meme-strip {
   position: absolute;
@@ -665,6 +665,18 @@ body[data-mode='ball'] .interaction-section { display: none; }
 .gesture-ball.mood-playful { outline: 2px dotted rgba(255,255,255,.7); outline-offset: 3px; }
 .gesture-ball.mood-angry { outline: 3px solid rgba(255,62,62,.88); outline-offset: 3px; box-shadow: 0 0 34px rgba(255,45,45,.8); }
 .gesture-ball.mood-lonely { opacity: .66; filter: grayscale(.55); }
+.gesture-ball.physical-contact {
+  border-radius: 45% 55% 48% 52%;
+  box-shadow:
+    inset calc(cos(var(--contact-angle, 0rad)) * -14px) calc(sin(var(--contact-angle, 0rad)) * -14px) 22px rgba(255,255,255,.42),
+    inset 10px 10px 22px rgba(255,255,255,.26),
+    0 0 34px var(--ball-glow),
+    0 20px 34px rgba(0,0,0,.3);
+}
+.gesture-ball.physical-contact .ball-asset {
+  transform: scale(calc(1 + var(--contact-strength, .06))) scaleY(calc(1 - var(--contact-strength, .06)));
+  transition: transform .08s ease-out;
+}
 @keyframes material-water-flow { to { border-radius: 54% 46% 57% 43%; } }
 @keyframes material-fire-pulse { to { filter: brightness(1.24) saturate(1.35); } }
 .gesture-ball.grabbing {

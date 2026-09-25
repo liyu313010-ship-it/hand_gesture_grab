@@ -158,6 +158,7 @@ const liveHandState = {
     vx: 0,
     vy: 0,
     points: [],
+    segments: [],
     angle: 0,
     angularVelocity: 0,
     spread: 1,
@@ -165,6 +166,14 @@ const liveHandState = {
     gesture: '未检测到手势',
     updatedAt: 0
 };
+const HAND_COLLISION_CHAINS = [
+    ['wrist', 'thumb_cmc', 'thumb_mcp', 'thumb_ip', 'thumb_tip'],
+    ['wrist', 'index_finger_mcp', 'index_finger_pip', 'index_finger_dip', 'index_finger_tip'],
+    ['wrist', 'middle_finger_mcp', 'middle_finger_pip', 'middle_finger_dip', 'middle_finger_tip'],
+    ['wrist', 'ring_finger_mcp', 'ring_finger_pip', 'ring_finger_dip', 'ring_finger_tip'],
+    ['wrist', 'pinky_finger_mcp', 'pinky_finger_pip', 'pinky_finger_dip', 'pinky_finger_tip'],
+    ['index_finger_mcp', 'middle_finger_mcp', 'ring_finger_mcp', 'pinky_finger_mcp', 'wrist']
+];
 const dualHandState = {
     active: false,
     left: null,
@@ -249,8 +258,8 @@ function updateFieldHud(text, materialText) {
 
 function mapPointToArea(point, canvas, areaRect) {
     if (getActiveMode() === 'ball' && canvas.width && canvas.height) {
-        // 球体竖屏使用 object-fit: cover：横屏摄像头只裁左右两侧，竖向人物画面保持完整。
-        // 这里复现 cover 的缩放与负偏移，保证裁切后画面里的手和虚拟光标仍严格重合。
+        // 球体画面使用 object-fit: cover。这里复现 cover 的缩放与偏移，
+        // 保证摄像画面发生轻微裁切后，手、骨架和虚拟球仍严格重合。
         const mediaAspect = canvas.width / canvas.height;
         const areaAspect = areaRect.width / areaRect.height;
         let drawWidth;
@@ -515,9 +524,28 @@ function syncLiveHand(x, y, gesture, hand, canvas, areaRect) {
     liveHandState.y = y;
     // 保存整只手的关键点碰撞轮廓。张掌拍球时不再只看一个掌心点，
     // 指尖、指节或掌边碰到球体也能立刻产生响应。
-    const mappedPoints = hand?.keypoints?.map(point => ({ ...mapPointToArea(point, canvas, areaRect), name: point.name })) ?? [];
+    const previousPoints = new Map(liveHandState.points.map(point => [point.name, point]));
+    const mappedPoints = hand?.keypoints?.map((point) => {
+        const mapped = mapPointToArea(point, canvas, areaRect);
+        const previous = previousPoints.get(point.name);
+        const rawVx = previous ? (mapped.x - previous.x) / elapsed : liveHandState.vx;
+        const rawVy = previous ? (mapped.y - previous.y) / elapsed : liveHandState.vy;
+        return {
+            ...mapped,
+            name: point.name,
+            vx: previous ? previous.vx * .34 + rawVx * .66 : rawVx,
+            vy: previous ? previous.vy * .34 + rawVy * .66 : rawVy
+        };
+    }) ?? [];
     liveHandState.points = mappedPoints;
     const pointByName = new Map(mappedPoints.map(point => [point.name, point]));
+    liveHandState.segments = HAND_COLLISION_CHAINS.flatMap((chain, chainIndex) => chain.slice(0, -1)
+        .map((name, index) => {
+            const a = pointByName.get(name);
+            const b = pointByName.get(chain[index + 1]);
+            return a && b ? { a, b, palm: chainIndex === HAND_COLLISION_CHAINS.length - 1 || index === 0 } : null;
+        })
+        .filter(Boolean));
     const wrist = pointByName.get('wrist');
     const middleMcp = pointByName.get('middle_finger_mcp');
     const indexMcp = pointByName.get('index_finger_mcp');
@@ -590,6 +618,98 @@ function nearestLiveHandPoint(x, y, includeAllPoints = true) {
     }, { point: liveHandState, distance: Infinity });
 }
 
+// 将整只手建模为由掌边和指骨组成的连续胶囊碰撞体。碰撞按接触法线分离球体，
+// 再以局部手指速度计算冲量与切向摩擦，因此托、拍、拨、扫都会传递真实方向和力度。
+function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
+    if (!liveHandState.active || frameTime - liveHandState.updatedAt > 230 || !liveHandState.segments.length) return false;
+    const center = { x: state.x + size / 2, y: state.y + size / 2 };
+    const radius = size / 2;
+    let best = null;
+    liveHandState.segments.forEach((segment) => {
+        const closest = closestPointOnSegment(center, segment.a, segment.b);
+        const segmentLengthSquared = closest.dx * closest.dx + closest.dy * closest.dy || 1;
+        const t = Math.max(0, Math.min(1,
+            ((closest.x - segment.a.x) * closest.dx + (closest.y - segment.a.y) * closest.dy) / segmentLengthSquared));
+        const dx = center.x - closest.x;
+        const dy = center.y - closest.y;
+        const distance = Math.hypot(dx, dy);
+        const skin = segment.palm ? 17 : 11;
+        const penetration = radius + skin - distance;
+        if (penetration <= 0 || (best && penetration <= best.penetration)) return;
+        best = {
+            dx,
+            dy,
+            distance,
+            penetration,
+            handVx: segment.a.vx + (segment.b.vx - segment.a.vx) * t,
+            handVy: segment.a.vy + (segment.b.vy - segment.a.vy) * t,
+            palm: segment.palm
+        };
+    });
+    if (!best) return false;
+
+    // 限制关键点偶发跳变造成的异常高速，保留快速拍击力度但不让球瞬间飞出画面。
+    const rawHandSpeed = Math.hypot(best.handVx, best.handVy);
+    if (rawHandSpeed > 900) {
+        const velocityScale = 900 / rawHandSpeed;
+        best.handVx *= velocityScale;
+        best.handVy *= velocityScale;
+    }
+
+    let nx = best.dx / (best.distance || 1);
+    let ny = best.dy / (best.distance || 1);
+    if (best.distance < .001) {
+        const fallbackLength = Math.hypot(center.x - liveHandState.x, center.y - liveHandState.y) || 1;
+        nx = (center.x - liveHandState.x) / fallbackLength;
+        ny = (center.y - liveHandState.y) / fallbackLength;
+    }
+    // 位置校正避免高速手掌穿球；只校正九成，保留少量柔软压缩感。
+    state.x += nx * best.penetration * .9;
+    state.y += ny * best.penetration * .9;
+
+    const relativeVx = state.vx - best.handVx;
+    const relativeVy = state.vy - best.handVy;
+    const normalVelocity = relativeVx * nx + relativeVy * ny;
+    const impactSpeed = Math.max(0, -normalVelocity);
+    if (normalVelocity < 0) {
+        const restitution = Math.max(.28, Math.min(.82, material.bounce * .78));
+        const impulse = -(1 + restitution) * normalVelocity;
+        state.vx += impulse * nx;
+        state.vy += impulse * ny;
+        // 切向摩擦让球能被手掌带着滚动，而不是像无摩擦冰球一样滑走。
+        const tangentX = -ny;
+        const tangentY = nx;
+        const tangentVelocity = relativeVx * tangentX + relativeVy * tangentY;
+        const friction = material.id === 'gel' ? .48 : material.id === 'glass' ? .12 : .28;
+        state.vx -= tangentVelocity * tangentX * friction;
+        state.vy -= tangentVelocity * tangentY * friction;
+    }
+    // 球在缓慢上托的掌面上会稳定随手移动；手一抽走便立即恢复重力。
+    const handSpeed = Math.hypot(best.handVx, best.handVy);
+    if (best.palm && ny < -.3 && handSpeed < 330) {
+        state.vy = Math.min(state.vy, best.handVy + 7);
+        state.vx = state.vx * .78 + best.handVx * .22;
+    }
+    state.touched = true;
+    state.lastTouchedAt = frameTime;
+
+    if (impactSpeed > 52 && frameTime - (state.lastContactEffect || 0) > 105) {
+        state.lastContactEffect = frameTime;
+        ball.style.setProperty('--contact-angle', `${Math.atan2(ny, nx)}rad`);
+        ball.style.setProperty('--contact-strength', `${Math.min(.18, impactSpeed / 1800).toFixed(3)}`);
+        ball.classList.remove('physical-contact');
+        void ball.offsetWidth;
+        ball.classList.add('physical-contact');
+        window.setTimeout(() => ball.classList.remove('physical-contact'), 150);
+        createSoftParticles(ball, 'hit', impactSpeed > 210 ? 9 : 4);
+        if (material.brittle && impactSpeed > 300) {
+            const index = [...document.querySelectorAll('.video-gesture-ball')].indexOf(ball);
+            explodeBall(ball, state, Math.max(0, index));
+        }
+    }
+    return true;
+}
+
 function handFieldMetrics(hand, canvas, areaRect) {
     if (!hand?.keypoints?.length) return null;
     const mapped = new Map(hand.keypoints.map(point => [point.name, mapPointToArea(point, canvas, areaRect)]));
@@ -658,7 +778,9 @@ function updateDualHandField(hands, canvas, areaRect) {
 
 function applyImmediateHandHit() {
     const isFingerPoke = liveHandState.gesture === '指尖点按';
-    if (liveHandState.gesture !== '张开手势' && !isFingerPoke) return;
+    // 张掌、扫动和托举统一交给逐帧指骨碰撞求解，避免检测循环和物理循环重复施加冲量。
+    // 这里只保留快速向上戳触发爆裂的低延迟判定。
+    if (!isFingerPoke) return;
     const speed = Math.hypot(liveHandState.vx, liveHandState.vy);
     if (speed < (isFingerPoke ? 24 : 75)) return;
     const now = performance.now();
@@ -725,6 +847,7 @@ function initialiseBallState(ball, index, area, force = false) {
         portalCooldown: 0,
         mergeCooldown: 0,
         lastHit: 0,
+        lastContactEffect: 0,
         lastFieldParticle: 0,
         lastTrail: 0,
         lastWallHit: 0,
@@ -756,6 +879,7 @@ function respawnBall(ball, state, index, area) {
     state.portalCooldown = 0;
     state.mergeCooldown = performance.now() + 700;
     state.lastHit = 0;
+    state.lastContactEffect = 0;
     state.lastFieldParticle = 0;
     state.lastTrail = 0;
     state.lastPoke = 0;
@@ -1144,6 +1268,7 @@ function animateVideoBalls(frameTime) {
             applyAutonomousBehavior(ball, state, size, elapsed, frameTime, index);
             applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area);
             applyBodyCollision(state, size, frameTime);
+            const physicalHandContact = resolvePhysicalHandContact(ball, state, size, material, frameTime);
 
             if (handIsLive && liveHandState.gesture === '握拳吸引') {
                 const ballX = state.x + size / 2;
@@ -1168,52 +1293,9 @@ function animateVideoBalls(frameTime) {
                     }
                 }
             } else if (handIsLive && liveHandState.gesture === '张开手势') {
-                const ballX = state.x + size / 2;
-                const ballY = state.y + size / 2;
-                const contact = nearestLiveHandPoint(ballX, ballY, true);
-                const dx = ballX - contact.point.x;
-                const dy = ballY - contact.point.y;
-                const distance = contact.distance || 1;
-                const handSpeed = Math.hypot(liveHandState.vx, liveHandState.vy);
-                const palmSurface = liveHandState.y - 8;
-                const ballBottom = state.y + size;
-                // 平放的手掌形成一块有宽度的托举面：掌心范围内的球落到掌面即被托住，
-                // 配合 settleBallStack 的球体堆叠，多颗球可以由低到高叠在掌上。
-                const inPalmColumn = Math.abs(ballX - liveHandState.x) < 156 + size * .3;
-                const sinkingIntoPalm = ballBottom > palmSurface - 10 && ballBottom < palmSurface + 124;
-                if (handSpeed < 480 && inPalmColumn && sinkingIntoPalm) {
-                    state.y = palmSurface - size;
-                    state.vy = Math.min(liveHandState.vy * .72, 18);
-                    state.vx += liveHandState.vx * elapsed * 1.8;
-                    state.touched = true;
-                    state.lastTouchedAt = frameTime;
-                    updateFieldHud('张掌托举 · 慢速黏附', material.label);
-                } else if (distance < size / 2 + 54 && frameTime - state.lastHit > 115) {
-                    // 快速扫过球体视作拍击，手速越快，球获得的弹性冲量越大。
-                    const nx = dx / distance;
-                    const ny = dy / distance;
-                    const strength = Math.min(430, Math.max(145, handSpeed * .72));
-                    state.vx += nx * strength + liveHandState.vx * .48;
-                    state.vy += ny * strength + liveHandState.vy * .48;
-                    state.lastHit = frameTime;
-                    state.touched = true;
-                    state.lastTouchedAt = frameTime;
-                    state.moodChangedAt = frameTime;
-                    setBallMood(ball, state, handSpeed > 220 ? 'angry' : 'playful');
-                    pulseBall(ball);
-                    createSoftParticles(ball, 'hit', 9);
-                } else {
-                    // 静止张掌也会形成连续斥力；五指张得越开，作用范围越大。
-                    const repelRadius = size / 2 + 48 + liveHandState.spread * 28;
-                    if (distance < repelRadius) {
-                        const force = 120 * (1 - distance / repelRadius);
-                        state.vx += dx / distance * force * elapsed;
-                        state.vy += dy / distance * force * elapsed;
-                        state.touched = true;
-                        state.lastTouchedAt = frameTime;
-                        updateFieldHud(`张掌斥力 · 强度 ${Math.round(liveHandState.spread * 32)}%`, material.label);
-                    }
-                }
+                // 实际接触由21点手骨胶囊碰撞完成；没有接触时不凭空弹球。
+                // 旋掌涡流等创新力场仍由 applyGestureFields 独立保留。
+                if (physicalHandContact) updateFieldHud('真实手部接触 · 托举 / 拨动 / 拍击', material.label);
             } else if (handIsLive && liveHandState.gesture === '指尖点按') {
                 const ballX = state.x + size / 2;
                 const ballY = state.y + size / 2;
