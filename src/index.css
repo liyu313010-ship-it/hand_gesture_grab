@@ -727,27 +727,6 @@ body[data-mode='ball'] .interaction-section { display: none; }
   32% { opacity: 1; transform: scale(1.3); filter: brightness(1.85); }
   100% { opacity: 0; transform: scale(1.62); filter: brightness(2.3); }
 }
-.air-goal {
-  position: absolute;
-  z-index: 4;
-  top: 18%;
-  right: 5%;
-  width: 92px;
-  height: 92px;
-  display: none;
-  place-items: center;
-  border: 2px dashed rgba(255,255,255,.76);
-  border-radius: 50%;
-  color: #fff;
-  background: radial-gradient(circle, rgba(255,255,255,.1), rgba(65,184,255,.08) 52%, transparent 54%);
-  box-shadow: 0 0 24px rgba(69,205,255,.38), inset 0 0 18px rgba(255,255,255,.14);
-  font-size: .58rem;
-  font-weight: 800;
-  letter-spacing: .12em;
-  pointer-events: none;
-}
-.air-goal i { position: absolute; inset: 12px; border: 1px solid rgba(255,255,255,.38); border-radius: 50%; }
-.air-goal.goal-flash { animation: goal-success .62s ease-out; }
 .air-control-hud {
   position: absolute;
   z-index: 7;
@@ -756,14 +735,12 @@ body[data-mode='ball'] .interaction-section { display: none; }
   left: 12px;
   display: none;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   color: #fff;
   font-size: .6rem;
   pointer-events: none;
   text-shadow: 0 1px 5px #000;
 }
-.air-control-hud b { padding: 4px 8px; border: 1px solid rgba(255,255,255,.35); border-radius: 999px; background: rgba(0,0,0,.45); }
-.air-control-hud i { font-style: normal; font-size: .82rem; }
 .innovation-hud {
   position: absolute;
   z-index: 7;
@@ -787,14 +764,8 @@ body[data-mode='ball'] .interaction-section { display: none; }
   text-shadow: 0 1px 4px #000;
   backdrop-filter: blur(5px);
 }
-body[data-mode='ball'] .air-goal { display: grid; }
 body[data-mode='ball'] .air-control-hud { display: flex; }
 body[data-mode='ball'] .innovation-hud { display: flex; }
-@keyframes goal-success {
-  0% { transform: scale(1); opacity: 1; }
-  45% { transform: scale(1.28); opacity: .72; box-shadow: 0 0 55px rgba(255,255,255,.9); }
-  100% { transform: scale(1); opacity: 1; }
-}
 .ball-particle-layer { position: absolute; inset: 0; z-index: 8; overflow: hidden; pointer-events: none; }
 .body-collider-line,
 .energy-rope {

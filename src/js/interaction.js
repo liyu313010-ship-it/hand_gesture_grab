@@ -151,7 +151,6 @@ let pointerDrag = null;
 let ballPhysicsStarted = false;
 let previousFrameTime = 0;
 let twoHandStretch = null;
-let airScore = 0;
 const ballStates = new Map();
 const liveHandState = {
     active: false,
@@ -240,13 +239,11 @@ function renderBallPosition(ball, state) {
 
 // 记录上一次写入的 HUD 文本；物理循环每帧都会调用本函数，值未变化时跳过 DOM 写入。
 let lastHudGestureText = '';
-let lastHudScoreText = '';
 let lastFieldText = '';
 let lastMaterialText = '';
 
 function updateAirHud(gesture) {
     const gestureElement = document.getElementById('airGesture');
-    const scoreElement = document.getElementById('airScore');
     const labels = {
         '抓取手势': '捏合控制 · 可移动抛出',
         '张开手势': '张掌控制 · 托举或拍击',
@@ -257,11 +254,6 @@ function updateAirHud(gesture) {
     if (gestureElement && gestureText !== lastHudGestureText) {
         gestureElement.textContent = gestureText;
         lastHudGestureText = gestureText;
-    }
-    const scoreText = String(airScore);
-    if (scoreElement && scoreText !== lastHudScoreText) {
-        scoreElement.textContent = scoreText;
-        lastHudScoreText = scoreText;
     }
 }
 
@@ -962,7 +954,6 @@ function initialiseBallState(ball, index, area, force = false) {
         lastFieldParticle: 0,
         lastTrail: 0,
         lastWallHit: 0,
-        lastGoalCheck: 0,
         touched: false
     };
     ballStates.set(ball, state);
@@ -994,7 +985,6 @@ function respawnBall(ball, state, index, area) {
     state.lastTrail = 0;
     state.lastPoke = 0;
     state.lastWallHit = 0;
-    state.lastGoalCheck = 0;
     state.touched = false;
     ball.classList.remove('ball-respawn');
     renderBallPosition(ball, state);
@@ -1099,36 +1089,6 @@ function settleBallStack(balls) {
         upper.state.vx = upper.state.vx * .55 + support.vx * .45;
         upper.state.touched = true;
     });
-}
-
-function checkAirGoal(ball, state, index, area, frameTime) {
-    if (!state.touched) return false;
-    // 每帧读取 rect 会强制同步布局，这里限制到约 8 次/秒，对判定精度无影响。
-    if (frameTime - state.lastGoalCheck < 120) return false;
-    state.lastGoalCheck = frameTime;
-    const goal = document.querySelector('.air-goal');
-    if (!goal) return false;
-    const areaRect = area.getBoundingClientRect();
-    const goalRect = goal.getBoundingClientRect();
-    const goalCenterX = goalRect.left - areaRect.left + goalRect.width / 2;
-    const goalCenterY = goalRect.top - areaRect.top + goalRect.height / 2;
-    const ballSize = state.size || Number(ball.dataset.physicsSize) || 80;
-    const ballCenterX = state.x + ballSize / 2;
-    const ballCenterY = state.y + ballSize / 2;
-    const normalizedDistance = Math.hypot(
-        (ballCenterX - goalCenterX) / (goalRect.width / 2),
-        (ballCenterY - goalCenterY) / (goalRect.height / 2)
-    );
-    if (normalizedDistance > .82) return false;
-
-    airScore += 1;
-    updateAirHud('投入目标 · 得分 +1');
-    createSoftParticles(ball, 'hit', 24);
-    goal.classList.remove('goal-flash');
-    requestAnimationFrame(() => goal.classList.add('goal-flash'));
-    window.setTimeout(() => goal.classList.remove('goal-flash'), 680);
-    respawnBall(ball, state, index, area);
-    return true;
 }
 
 function applyMagneticForces(balls, elapsed) {
@@ -1439,7 +1399,6 @@ function animateVideoBalls(frameTime) {
                 createMotionTrail(ball);
                 state.lastTrail = frameTime;
             }
-            if (checkAirGoal(ball, state, index, area, frameTime)) return;
             const maxX = Math.max(0, area.clientWidth - size);
             if (state.x <= 0 || state.x >= maxX) {
                 state.x = Math.max(0, Math.min(state.x, maxX));
@@ -1471,7 +1430,6 @@ function animateVideoBalls(frameTime) {
 function resetVideoBalls() {
     const area = document.querySelector('.video-container');
     if (!area) return;
-    airScore = 0;
     updateAirHud('等待手势');
     [...document.querySelectorAll('.video-gesture-ball')].forEach((ball, index) => {
         initialiseBallState(ball, index, area, true);
@@ -1513,7 +1471,7 @@ function splitBall(ball) {
     clone.style.removeProperty('--stretch-scale-x');
     clone.style.removeProperty('--stretch-scale-y');
     clone.style.removeProperty('--stretch-angle');
-    area.insertBefore(clone, area.querySelector('.air-goal'));
+    area.insertBefore(clone, area.querySelector('.ball-particle-layer'));
     ball.style.setProperty('--ball-size', `${childSize}px`);
     state.size = childSize;
     state.x = Math.max(0, state.x - childSize * .42);
