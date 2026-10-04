@@ -707,7 +707,7 @@ body[data-mode='ball'] .interaction-section { display: none; }
 .gesture-ball.ball-bounce { animation: ball-elastic-hit .34s cubic-bezier(.2,.9,.3,1); }
 .gesture-ball.ball-respawn { animation: ball-respawn-in .5s cubic-bezier(.2,.8,.3,1); }
 /* 指尖向上戳中的爆裂：放大、爆闪后消散，随后由脚本重生。 */
-.gesture-ball.ball-explode { animation: ball-explode-pop .42s cubic-bezier(.2,.75,.3,1) forwards; pointer-events: none; }
+.gesture-ball.ball-explode { animation: ball-explode-pop .34s cubic-bezier(.2,.75,.3,1) forwards; pointer-events: none; }
 @keyframes ball-soft-grab {
   from { transform: scale(.92, 1.07) rotate(-2deg); }
   to { transform: scale(1.07, .93) rotate(2deg); }
@@ -724,8 +724,8 @@ body[data-mode='ball'] .interaction-section { display: none; }
 }
 @keyframes ball-explode-pop {
   0% { opacity: 1; transform: scale(1); filter: brightness(1); }
-  32% { opacity: 1; transform: scale(1.3); filter: brightness(1.85); }
-  100% { opacity: 0; transform: scale(1.62); filter: brightness(2.3); }
+  38% { opacity: .92; transform: scale(1.1); filter: brightness(1.2); }
+  100% { opacity: 0; transform: scale(1.28); filter: brightness(1.3); }
 }
 .air-control-hud {
   position: absolute;
@@ -773,7 +773,8 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   width: 100%;
   height: 100%;
   pointer-events: none;
-  mix-blend-mode: screen;
+  mix-blend-mode: normal;
+  opacity: .82;
 }
 .ball-particle-layer { position: absolute; inset: 0; z-index: 9; overflow: hidden; pointer-events: none; }
 .body-collider-line,
@@ -802,10 +803,10 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   height: var(--particle-size, 8px);
   border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #fff 0 18%, var(--particle-color, #fff) 42%, transparent 74%);
-  box-shadow: 0 0 7px #fff, 0 0 16px var(--particle-color, #fff), 0 0 30px color-mix(in srgb, var(--particle-color, #fff) 68%, transparent);
+  box-shadow: 0 0 4px rgba(255,255,255,.72), 0 0 9px var(--particle-color, #fff);
   opacity: 0;
-  mix-blend-mode: screen;
-  filter: saturate(1.25);
+  mix-blend-mode: normal;
+  filter: saturate(1.05);
   transform: translate(-50%, -50%) scale(.4);
   animation: soft-particle-release .72s cubic-bezier(.18,.7,.24,1) forwards;
   animation-delay: var(--particle-delay, 0ms);
@@ -829,7 +830,7 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scaleX(.35);
 }
 .soft-particle.is-grab { animation-name: soft-particle-grab; }
-.soft-particle.is-burst { animation-name: soft-particle-burst; animation-duration: .92s; }
+.soft-particle.is-burst { animation-name: soft-particle-burst; animation-duration: .5s; }
 .ball-motion-trail {
   position: absolute;
   width: var(--trail-size, 34px);
@@ -837,8 +838,8 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   border: 1px solid rgba(255,255,255,.76);
   border-radius: 50%;
   background: radial-gradient(circle, transparent 38%, color-mix(in srgb, var(--particle-color, #fff) 22%, transparent) 62%, transparent 74%);
-  box-shadow: 0 0 12px #fff, 0 0 28px var(--particle-color, #fff), inset 0 0 18px var(--particle-color, #fff);
-  mix-blend-mode: screen;
+  box-shadow: 0 0 6px var(--particle-color, #fff), inset 0 0 7px var(--particle-color, #fff);
+  mix-blend-mode: normal;
   transform: translate(-50%, -50%);
   animation: ball-trail-fade .62s ease-out forwards;
 }
@@ -848,12 +849,12 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   position: absolute;
   width: 30px;
   height: 30px;
-  border: 3px solid var(--particle-color, #fff);
+  border: 1px solid color-mix(in srgb, var(--particle-color, #fff) 72%, transparent);
   border-radius: 50%;
-  box-shadow: 0 0 12px #fff, 0 0 28px var(--particle-color, #fff), 0 0 54px var(--particle-color, #fff), inset 0 0 16px var(--particle-color, #fff);
-  mix-blend-mode: screen;
+  box-shadow: 0 0 9px var(--particle-color, #fff);
+  mix-blend-mode: normal;
   transform: translate(-50%, -50%);
-  animation: ball-blast-out .52s cubic-bezier(.15,.65,.28,1) forwards;
+  animation: ball-blast-out .38s cubic-bezier(.15,.65,.28,1) forwards;
 }
 .ball-blast-ring.ring-secondary { border-width: 1px; animation-delay: 90ms; filter: hue-rotate(48deg); }
 @keyframes soft-particle-release {
@@ -867,17 +868,17 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   100% { opacity: 0; transform: translate(-50%, -50%) rotate(calc(var(--particle-rotate, 0deg) + 120deg)) scale(.18); }
 }
 @keyframes soft-particle-burst {
-  0% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scale(.45); }
-  70% { opacity: .85; }
-  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) rotate(calc(var(--particle-rotate, 0deg) + 90deg)) scale(1.65); }
+  0% { opacity: .72; transform: translate(-50%, -50%) rotate(var(--particle-rotate, 0deg)) scale(.45); }
+  45% { opacity: .46; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--particle-x)), calc(-50% + var(--particle-y))) rotate(calc(var(--particle-rotate, 0deg) + 55deg)) scale(1.08); }
 }
 @keyframes ball-blast-out {
-  from { opacity: .95; transform: translate(-50%, -50%) scale(.5); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(4.6); }
+  from { opacity: .5; transform: translate(-50%, -50%) scale(.6); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(2.15); }
 }
 @keyframes ball-trail-fade {
-  from { opacity: .56; transform: translate(-50%, -50%) scale(.65); }
-  to { opacity: 0; transform: translate(-50%, -50%) scale(1.7); }
+  from { opacity: .3; transform: translate(-50%, -50%) scale(.72); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(1.35); }
 }
 .object {
   position: absolute;

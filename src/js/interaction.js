@@ -142,9 +142,6 @@ function applyBallLook(ball) {
 
 // 指尖向上戳的判定速度（px/s，屏幕坐标向上为负），达到即触发球体爆裂。
 const EXPLODE_UPWARD_SPEED = 150;
-// 爆裂粒子的多彩配色。
-const BURST_COLORS = ['#ff5e5a', '#ffc857', '#2dceeb', '#aa69ff', '#96e15f', '#ff76d4', '#609eff', '#5ee2b2'];
-
 // 抓取时的偏移量（记录光标与物品抓取点的偏移）
 let grabOffset = { x: 0, y: 0 };
 
@@ -436,9 +433,9 @@ const MATERIAL_EFFECT_STYLE = {
 
 // Canvas 特效层使用固定容量的对象池：粒子、冲击波和余辉都从池中取用、用完归还。
 // 触发再密集也只会有上限内的对象参与绘制，不会因每帧新建对象重新引入卡顿。
-const PARTICLE_LIMIT = 300;
-const WAVE_LIMIT = 22;
-const GLOW_LIMIT = 48;
+const PARTICLE_LIMIT = 180;
+const WAVE_LIMIT = 10;
+const GLOW_LIMIT = 18;
 const particlePool = [];
 const glowPool = [];
 const activeGlows = [];
@@ -568,7 +565,7 @@ function emitAdvancedParticles(ball, type = 'release', amount = 13) {
     const color = ballColor(ball);
     const centerX = metrics.x + metrics.size / 2;
     const centerY = metrics.y + metrics.size / 2;
-    const impact = Math.min(1.85, Math.max(.5, (state?.lastImpactSpeed || 90) / 150));
+    const impact = Math.min(1.25, Math.max(.45, (state?.lastImpactSpeed || 90) / 170));
     const travelAngle = Math.atan2(state?.vy || -1, state?.vx || 1);
     const contactAngle = state?.contactNormal
         ? Math.atan2(state.contactNormal.y, state.contactNormal.x)
@@ -576,9 +573,9 @@ function emitAdvancedParticles(ball, type = 'release', amount = 13) {
     const isBurst = type === 'burst';
     const isStreak = type === 'trail';
     const isImplosion = type === 'grab';
-    const particleCount = Math.min(isBurst ? 76 : 30, Math.max(2, Math.round(amount * (isBurst ? 1.55 : 1.2))));
-    const speedBase = isBurst ? 208 : type === 'hit' ? 132 : isStreak ? 30 : 84;
-    const lifeBase = isBurst ? .95 : isStreak ? .42 : .6;
+    const particleCount = Math.min(isBurst ? 24 : 16, Math.max(2, Math.round(amount * (isBurst ? .72 : .68))));
+    const speedBase = isBurst ? 116 : type === 'hit' ? 88 : isStreak ? 22 : 58;
+    const lifeBase = isBurst ? .5 : isStreak ? .28 : .4;
 
     for (let index = 0; index < particleCount; index += 1) {
         const particle = acquireParticle();
@@ -600,8 +597,9 @@ function emitAdvancedParticles(ball, type = 'release', amount = 13) {
         particle.vy = Math.sin(angle) * speed * inward + (state?.vy || 0) * inherit;
         particle.life = 0;
         particle.maxLife = lifeBase * (.7 + Math.random() * .7);
-        particle.size = (isBurst ? 5 : isStreak ? 3.2 : 3.4) + Math.random() * (isBurst ? 8 : 5.5);
-        particle.color = isBurst ? BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)] : color;
+        particle.size = (isBurst ? 3.2 : isStreak ? 2.4 : 2.8) + Math.random() * (isBurst ? 4.2 : 3.6);
+        // 爆裂也沿用球体自身色彩，避免彩虹色粒子同时出现造成视觉噪声。
+        particle.color = color;
         particle.shape = style.shape;
         particle.gravity = style.gravity * (isStreak ? .35 : 1);
         particle.drag = style.drag;
@@ -618,41 +616,24 @@ function emitAdvancedParticles(ball, type = 'release', amount = 13) {
     pushAdvancedWave({
         x: centerX, y: centerY,
         radius: metrics.size * .2,
-        maxRadius: metrics.size * (isBurst ? 2.1 : 1.15) * style.waveScale * Math.min(1.4, impact),
+        maxRadius: metrics.size * (isBurst ? 1.08 : .82) * style.waveScale * Math.min(1.15, impact),
         life: 0,
-        maxLife: isBurst ? .78 : .5,
+        maxLife: isBurst ? .42 : .34,
         color,
         material,
         direction: contactAngle,
         spread: isBurst ? Math.PI : style.waveSpread,
-        width: style.waveWidth,
+        width: Math.min(2.4, style.waveWidth * .55),
         dashed: Boolean(style.dashed),
         inward: isImplosion,
-        alpha: isImplosion ? .5 : .9
+        alpha: isImplosion ? .34 : isBurst ? .48 : .4
     });
     if (isBurst) {
-        pushAdvancedWave({
-            x: centerX, y: centerY,
-            radius: metrics.size * .24,
-            maxRadius: metrics.size * 1.9 * Math.min(1.5, impact),
-            life: 0, maxLife: .66,
-            color, material,
-            direction: contactAngle, spread: Math.PI,
-            width: 5, dashed: false, inward: false, alpha: .75
-        });
-        spawnAfterglow(centerX, centerY, metrics.size * .55, color, .8, 1.7, 1.05);
-        for (let index = 0; index < 3; index += 1) {
-            spawnAfterglow(
-                centerX + (Math.random() - .5) * metrics.size,
-                centerY + (Math.random() - .5) * metrics.size,
-                metrics.size * (.22 + Math.random() * .2),
-                BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)],
-                .5, 1.3, .7 + Math.random() * .5
-            );
-        }
-    } else if (!isImplosion) {
+        // 爆裂只保留单层小范围波纹和一个短余辉，不再叠加全屏彩色闪光。
+        spawnAfterglow(centerX, centerY, metrics.size * .28, color, .24, .62, .38);
+    } else if (!isImplosion && impact > .78) {
         // 撞击余辉：打击点残留一个短暂的光团，慢半拍地熄灭。
-        spawnAfterglow(centerX, centerY, metrics.size * .34, color, .5, 1.5, .62);
+        spawnAfterglow(centerX, centerY, metrics.size * .22, color, .2, .72, .34);
     }
 }
 
@@ -821,15 +802,6 @@ function drawAdvancedWave(context, wave, progress) {
         context.arc(0, 0, radius, wave.direction - wave.spread, wave.direction + wave.spread);
     }
     context.stroke();
-    if (!full) {
-        // 方向冲击波在撞击正前方再补一道更亮更窄的波前高光。
-        context.setLineDash([]);
-        context.strokeStyle = `rgba(255,255,255,${alpha * .72})`;
-        const lead = wave.spread * .4;
-        context.beginPath();
-        context.arc(0, 0, radius * 1.04, wave.direction - lead, wave.direction + lead);
-        context.stroke();
-    }
     context.restore();
 }
 
@@ -862,11 +834,11 @@ function renderAdvancedEffects(frameTime) {
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.globalCompositeOperation = 'destination-out';
     context.globalAlpha = 1;
-    // 逐帧淡化上一帧而不是清空：高速粒子自然拖出尾迹，光晕也会缓缓消退。
-    context.fillStyle = 'rgba(0, 0, 0, .34)';
+    // 快速淡化上一帧，保留动作方向感但避免连续交互时拖尾堆满画面。
+    context.fillStyle = 'rgba(0, 0, 0, .62)';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.setTransform(dpr, 0, 0, dpr, 0, 0);
-    context.globalCompositeOperation = 'lighter';
+    context.globalCompositeOperation = 'source-over';
 
     for (let index = advancedWaves.length - 1; index >= 0; index -= 1) {
         const wave = advancedWaves[index];
@@ -895,8 +867,8 @@ function renderAdvancedEffects(frameTime) {
         particle.life += elapsed;
         if (particle.life >= particle.maxLife) {
             // 火星熄灭时偶尔化作一小团余烬，是最典型的余辉来源。
-            if (particle.shape === 'ember' && Math.random() < .3) {
-                spawnAfterglow(particle.x, particle.y, particle.size * 1.6, particle.color, .34, 1.1, .5);
+            if (particle.shape === 'ember' && Math.random() < .08) {
+                spawnAfterglow(particle.x, particle.y, particle.size * 1.25, particle.color, .16, .6, .28);
             }
             advancedParticles[index] = advancedParticles[advancedParticles.length - 1];
             advancedParticles.pop();
@@ -932,9 +904,9 @@ function createSoftParticles(ball, type = 'release', amount = 13) {
     const area = ball.closest('.video-container');
     if (!layer || !area) return;
     // 控制临时 DOM 数量，避免多球连续碰撞时粒子反过来拖慢手势识别。
-    const particleBudget = Math.max(0, 120 - layer.querySelectorAll('.soft-particle, .ball-motion-trail').length);
+    const particleBudget = Math.max(0, 60 - layer.querySelectorAll('.soft-particle, .ball-motion-trail').length);
     // 少量DOM星芒作为锐利前景，粒子、冲击波和余辉主体交给 Canvas 特效层批量绘制。
-    amount = Math.min(Math.ceil(amount * .42), particleBudget);
+    amount = Math.min(Math.ceil(amount * .24), particleBudget);
     if (!amount) return;
 
     const metrics = ballVisualMetrics(ball);
@@ -944,14 +916,14 @@ function createSoftParticles(ball, type = 'release', amount = 13) {
     for (let index = 0; index < amount; index += 1) {
         const particle = document.createElement('i');
         const angle = (Math.PI * 2 * index) / amount + Math.random() * .35;
-        const distance = 30 + Math.random() * (type === 'hit' ? 58 : 42);
+        const distance = 20 + Math.random() * (type === 'hit' ? 34 : 28);
         const particleKind = index % 4 === 0 ? ' is-streak' : index % 3 === 0 ? ' is-spark' : '';
         particle.className = `soft-particle${type === 'grab' ? ' is-grab' : ''}${particleKind}`;
         particle.style.left = `${centerX}px`;
         particle.style.top = `${centerY}px`;
         particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
         particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
-        particle.style.setProperty('--particle-size', `${4 + Math.random() * 7}px`);
+        particle.style.setProperty('--particle-size', `${3 + Math.random() * 4}px`);
         particle.style.setProperty('--particle-color', color);
         particle.style.setProperty('--particle-rotate', `${Math.round(angle * 180 / Math.PI)}deg`);
         particle.style.setProperty('--particle-delay', `${Math.random() * 80}ms`);
@@ -975,7 +947,7 @@ function createMotionTrail(ball) {
 }
 
 // 爆裂星芒：作为 Canvas 爆裂粒子的锐利前景，只保留少量 DOM 节点。
-function createBurstParticles(ball, amount = 16) {
+function createBurstParticles(ball, amount = 6) {
     if (!ball?.classList.contains('video-gesture-ball')) return;
     const layer = document.querySelector('.ball-particle-layer');
     const area = ball.closest('.video-container');
@@ -987,14 +959,14 @@ function createBurstParticles(ball, amount = 16) {
     for (let index = 0; index < amount; index += 1) {
         const particle = document.createElement('i');
         const angle = (Math.PI * 2 * index) / amount + Math.random() * .45;
-        const distance = 65 + Math.random() * 135;
+        const distance = 26 + Math.random() * 48;
         particle.className = `soft-particle is-burst${index % 3 === 0 ? ' is-streak' : index % 2 === 0 ? ' is-spark' : ''}`;
         particle.style.left = `${centerX}px`;
         particle.style.top = `${centerY}px`;
         particle.style.setProperty('--particle-x', `${Math.cos(angle) * distance}px`);
         particle.style.setProperty('--particle-y', `${Math.sin(angle) * distance}px`);
-        particle.style.setProperty('--particle-size', `${5 + Math.random() * 8}px`);
-        particle.style.setProperty('--particle-color', BURST_COLORS[index % BURST_COLORS.length]);
+        particle.style.setProperty('--particle-size', `${3 + Math.random() * 3}px`);
+        particle.style.setProperty('--particle-color', ballColor(ball));
         particle.style.setProperty('--particle-rotate', `${Math.round(angle * 180 / Math.PI)}deg`);
         particle.style.setProperty('--particle-delay', `${Math.random() * 90}ms`);
         layer.appendChild(particle);
@@ -1006,7 +978,7 @@ function createBurstParticles(ball, amount = 16) {
 function createBlastRing(ball) {
     const layer = document.querySelector('.ball-particle-layer');
     if (!layer) return;
-    [0, 1].forEach((depth) => {
+    [0].forEach((depth) => {
         const ring = document.createElement('i');
         ring.className = `ball-blast-ring${depth ? ' ring-secondary' : ''}`;
         const metrics = ballVisualMetrics(ball);
@@ -1030,8 +1002,8 @@ function explodeBall(ball, state, index) {
     const area = ball.closest('.video-container');
     if (!area || ball.classList.contains('exploding')) return;
     ball.classList.add('ball-explode', 'exploding');
-    state.lastImpactSpeed = 260;
-    emitAdvancedParticles(ball, 'burst', 48);
+    state.lastImpactSpeed = 150;
+    emitAdvancedParticles(ball, 'burst', 14);
     createBurstParticles(ball);
     createBlastRing(ball);
     playSfx('explode', { material: state.material });
