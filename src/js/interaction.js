@@ -1,6 +1,7 @@
 let grabbedObject = null;
 import { initSpeechSynthesis } from './voice.js';
 import { isCameraOn } from './camera.js';
+import { playSfx } from './sfx.js';
 import candyReaction from '../../19套表情包素材/蹦蹦跳跳，开心.gif';
 import giftReaction from '../../19套表情包素材/给你惊喜.gif';
 import flowerReaction from '../../19套表情包素材/拿着花花，开心的手舞足蹈.gif';
@@ -153,6 +154,10 @@ let ballPhysicsStarted = false;
 let previousFrameTime = 0;
 let twoHandStretch = null;
 const ballStates = new Map();
+const advancedParticles = [];
+const advancedWaves = [];
+let effectsContext = null;
+let effectsLastFrame = 0;
 const liveHandState = {
     active: false,
     x: 0,
@@ -191,7 +196,7 @@ const dualHandState = {
 };
 const liveBodyState = { segments: [], updatedAt: 0 };
 let fingerPath = [];
-let lastPathParticleAt = 0;
+let lastPathSampleAt = 0;
 let pathOrbit = null;
 
 // 把物品抬到最上层，后触碰的收藏品始终显示在前面
@@ -420,14 +425,516 @@ function getPinchData(hand, canvas, areaRect) {
     };
 }
 
+const MATERIAL_EFFECT_STYLE = {
+    water: { shape: 'drop', gravity: 148, drag: .982, spread: 1.05, waveSpread: .95, waveWidth: 4.5, waveScale: 1.15 },
+    gel: { shape: 'blob', gravity: 62, drag: .962, spread: 1.35, waveSpread: 1.5, waveWidth: 7, waveScale: 1.3 },
+    glass: { shape: 'shard', gravity: 196, drag: .993, spread: .62, waveSpread: .5, waveWidth: 3, waveScale: 1.25 },
+    fire: { shape: 'ember', gravity: -118, drag: .976, spread: 1.15, waveSpread: 1.25, waveWidth: 5, waveScale: 1.1 },
+    magnet: { shape: 'arc', gravity: 0, drag: .97, spread: 1.6, waveSpread: 1.1, waveWidth: 3, waveScale: 1.2, dashed: true },
+    bubble: { shape: 'bubble', gravity: -52, drag: .955, spread: 1.9, waveSpread: 2.05, waveWidth: 3.2, waveScale: 1.05 }
+};
+
+// Canvas 特效层使用固定容量的对象池：粒子、冲击波和余辉都从池中取用、用完归还。
+// 触发再密集也只会有上限内的对象参与绘制，不会因每帧新建对象重新引入卡顿。
+const PARTICLE_LIMIT = 300;
+const WAVE_LIMIT = 22;
+const GLOW_LIMIT = 48;
+const particlePool = [];
+const glowPool = [];
+const activeGlows = [];
+for (let index = 0; index < PARTICLE_LIMIT; index += 1) {
+    particlePool.push({
+        x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: .6, size: 4,
+        color: '#ffffff', shape: 'blob', gravity: 0, drag: .98,
+        rotation: 0, spin: 0, phase: 0
+    });
+}
+for (let index = 0; index < GLOW_LIMIT; index += 1) {
+    glowPool.push({ x: 0, y: 0, size: 10, growth: 1.4, life: 0, maxLife: .9, color: '#ffffff', peak: .6 });
+}
+
+function acquireParticle() {
+    return particlePool.pop() || null;
+}
+
+function releaseParticle(particle) {
+    particlePool.push(particle);
+}
+
+function pushAdvancedWave(config) {
+    // 池满时让最旧的冲击波提前退场，保证新撞击总能立刻得到反馈。
+    if (advancedWaves.length >= WAVE_LIMIT) advancedWaves.shift();
+    advancedWaves.push(config);
+}
+
+function spawnAfterglow(x, y, size, color, peak = .55, growth = 1.5, maxLife = .85) {
+    const glow = glowPool.pop();
+    if (!glow) return;
+    glow.x = x;
+    glow.y = y;
+    glow.size = size;
+    glow.growth = growth;
+    glow.life = 0;
+    glow.maxLife = maxLife;
+    glow.color = color;
+    glow.peak = peak;
+    activeGlows.push(glow);
+}
+
+let effectsArea = null;
+let effectsResizeObserver = null;
+let effectsDpr = 1;
+let effectsHadContent = false;
+let effectsIdleFrames = 0;
+const effectsViewport = { width: 0, height: 0 };
+
+function resizeEffectsCanvas(canvas) {
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const pixelWidth = Math.round(effectsViewport.width * dpr);
+    const pixelHeight = Math.round(effectsViewport.height * dpr);
+    if (!pixelWidth || !pixelHeight) return;
+    if (canvas.width === pixelWidth && canvas.height === pixelHeight && effectsContext) return;
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+    effectsDpr = dpr;
+    effectsContext = canvas.getContext('2d', { alpha: true, desynchronized: true });
+}
+
+function ensureEffectsContext() {
+    const canvas = document.getElementById('effectsCanvas');
+    const area = canvas?.closest('.video-container');
+    if (!canvas || !area) return null;
+    if (effectsArea !== area) {
+        // 只在切换容器时读一次布局尺寸，之后新尺寸由 ResizeObserver 推送，
+        // 避免每帧读取 clientWidth 触发强制回流。
+        effectsArea = area;
+        const rect = area.getBoundingClientRect();
+        effectsViewport.width = rect.width;
+        effectsViewport.height = rect.height;
+        effectsResizeObserver?.disconnect();
+        if (typeof ResizeObserver === 'function') {
+            effectsResizeObserver = new ResizeObserver((entries) => {
+                const entry = entries[0];
+                if (!entry) return;
+                effectsViewport.width = entry.contentRect.width;
+                effectsViewport.height = entry.contentRect.height;
+                resizeEffectsCanvas(canvas);
+            });
+            effectsResizeObserver.observe(area);
+        } else {
+            effectsResizeObserver = null;
+        }
+    }
+    if (!effectsViewport.width || !effectsViewport.height) return null;
+    resizeEffectsCanvas(canvas);
+    return effectsContext
+        ? { canvas, context: effectsContext, width: effectsViewport.width, height: effectsViewport.height, dpr: effectsDpr }
+        : null;
+}
+
+// 切换模式或重置交互时清空特效层，避免上一场景的粒子飘在别的模式画面上。
+function clearAdvancedEffects() {
+    while (advancedParticles.length) releaseParticle(advancedParticles.pop());
+    while (activeGlows.length) glowPool.push(activeGlows.pop());
+    advancedWaves.length = 0;
+    effectsHadContent = false;
+    effectsIdleFrames = 0;
+    const canvas = document.getElementById('effectsCanvas');
+    const context = canvas?.getContext('2d');
+    if (!canvas || !context || !canvas.width || !canvas.height) return;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.globalCompositeOperation = 'source-over';
+    context.globalAlpha = 1;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function hexToRgb(hex) {
+    const normalized = hex.replace('#', '');
+    const value = Number.parseInt(normalized.length === 3
+        ? normalized.split('').map(character => character + character).join('')
+        : normalized, 16);
+    return Number.isFinite(value)
+        ? { r: value >> 16 & 255, g: value >> 8 & 255, b: value & 255 }
+        : { r: 255, g: 255, b: 255 };
+}
+
+function emitAdvancedParticles(ball, type = 'release', amount = 13) {
+    if (!ball?.classList.contains('video-gesture-ball')) return;
+    if (!ensureEffectsContext()) return;
+    const metrics = ballVisualMetrics(ball);
+    const state = ballStates.get(ball);
+    const material = state?.material || ball.dataset.material || 'water';
+    const style = MATERIAL_EFFECT_STYLE[material] || MATERIAL_EFFECT_STYLE.water;
+    const color = ballColor(ball);
+    const centerX = metrics.x + metrics.size / 2;
+    const centerY = metrics.y + metrics.size / 2;
+    const impact = Math.min(1.85, Math.max(.5, (state?.lastImpactSpeed || 90) / 150));
+    const travelAngle = Math.atan2(state?.vy || -1, state?.vx || 1);
+    const contactAngle = state?.contactNormal
+        ? Math.atan2(state.contactNormal.y, state.contactNormal.x)
+        : travelAngle;
+    const isBurst = type === 'burst';
+    const isStreak = type === 'trail';
+    const isImplosion = type === 'grab';
+    const particleCount = Math.min(isBurst ? 76 : 30, Math.max(2, Math.round(amount * (isBurst ? 1.55 : 1.2))));
+    const speedBase = isBurst ? 208 : type === 'hit' ? 132 : isStreak ? 30 : 84;
+    const lifeBase = isBurst ? .95 : isStreak ? .42 : .6;
+
+    for (let index = 0; index < particleCount; index += 1) {
+        const particle = acquireParticle();
+        // 池满即停止本次喷发：宁可少画几颗，也不让粒子总数失控拖慢手势识别。
+        if (!particle) break;
+        const radial = isBurst || type === 'release';
+        const angle = isStreak
+            ? travelAngle + (Math.random() - .5) * .6
+            : radial
+                ? Math.random() * Math.PI * 2
+                : contactAngle + (Math.random() - .5) * style.spread * 2;
+        const startDistance = isImplosion ? 26 + Math.random() * 40 : Math.random() * metrics.size * .22;
+        const speed = speedBase * impact * (.55 + Math.random() * .75);
+        const inward = isImplosion ? -1 : 1;
+        const inherit = isStreak ? .35 : .18;
+        particle.x = centerX + Math.cos(angle) * startDistance;
+        particle.y = centerY + Math.sin(angle) * startDistance;
+        particle.vx = Math.cos(angle) * speed * inward + (state?.vx || 0) * inherit;
+        particle.vy = Math.sin(angle) * speed * inward + (state?.vy || 0) * inherit;
+        particle.life = 0;
+        particle.maxLife = lifeBase * (.7 + Math.random() * .7);
+        particle.size = (isBurst ? 5 : isStreak ? 3.2 : 3.4) + Math.random() * (isBurst ? 8 : 5.5);
+        particle.color = isBurst ? BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)] : color;
+        particle.shape = style.shape;
+        particle.gravity = style.gravity * (isStreak ? .35 : 1);
+        particle.drag = style.drag;
+        particle.rotation = Math.random() * Math.PI * 2;
+        particle.spin = (Math.random() - .5) * 9;
+        particle.phase = Math.random() * Math.PI * 2;
+        advancedParticles.push(particle);
+    }
+
+    if (isStreak) return;
+
+    // 方向冲击波：沿撞击法线张开的弧形波纹，而不是一个完整圆环；
+    // 抓取时波纹改为向内收缩，形成“吸入”的反馈。
+    pushAdvancedWave({
+        x: centerX, y: centerY,
+        radius: metrics.size * .2,
+        maxRadius: metrics.size * (isBurst ? 2.1 : 1.15) * style.waveScale * Math.min(1.4, impact),
+        life: 0,
+        maxLife: isBurst ? .78 : .5,
+        color,
+        material,
+        direction: contactAngle,
+        spread: isBurst ? Math.PI : style.waveSpread,
+        width: style.waveWidth,
+        dashed: Boolean(style.dashed),
+        inward: isImplosion,
+        alpha: isImplosion ? .5 : .9
+    });
+    if (isBurst) {
+        pushAdvancedWave({
+            x: centerX, y: centerY,
+            radius: metrics.size * .24,
+            maxRadius: metrics.size * 1.9 * Math.min(1.5, impact),
+            life: 0, maxLife: .66,
+            color, material,
+            direction: contactAngle, spread: Math.PI,
+            width: 5, dashed: false, inward: false, alpha: .75
+        });
+        spawnAfterglow(centerX, centerY, metrics.size * .55, color, .8, 1.7, 1.05);
+        for (let index = 0; index < 3; index += 1) {
+            spawnAfterglow(
+                centerX + (Math.random() - .5) * metrics.size,
+                centerY + (Math.random() - .5) * metrics.size,
+                metrics.size * (.22 + Math.random() * .2),
+                BURST_COLORS[Math.floor(Math.random() * BURST_COLORS.length)],
+                .5, 1.3, .7 + Math.random() * .5
+            );
+        }
+    } else if (!isImplosion) {
+        // 撞击余辉：打击点残留一个短暂的光团，慢半拍地熄灭。
+        spawnAfterglow(centerX, centerY, metrics.size * .34, color, .5, 1.5, .62);
+    }
+}
+
+// 每种「材质形状 × 颜色」只烘焙一次发光精灵，绘制时直接 drawImage，
+// 省掉逐粒子路径填充与 shadowBlur 的高昂开销。
+const spriteCache = new Map();
+const SPRITE_SIZE = 64;
+const SPRITE_UNIT = 9;
+
+function particleSprite(shape, color) {
+    const key = `${shape}|${color}`;
+    const cached = spriteCache.get(key);
+    if (cached) return cached;
+    const canvas = document.createElement('canvas');
+    canvas.width = SPRITE_SIZE;
+    canvas.height = SPRITE_SIZE;
+    const context = canvas.getContext('2d');
+    const rgb = hexToRgb(color);
+    const paint = (alpha) => `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+    const half = SPRITE_SIZE / 2;
+    const unit = SPRITE_UNIT;
+    // 所有粒子共享同一套柔和外发光打底，材质差异之上保持统一的发光语言。
+    const halo = context.createRadialGradient(half, half, unit * .18, half, half, half);
+    halo.addColorStop(0, paint(shape === 'blob' ? .78 : .52));
+    halo.addColorStop(.45, paint(.24));
+    halo.addColorStop(1, paint(0));
+    context.fillStyle = halo;
+    context.fillRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+    context.save();
+    context.translate(half, half);
+    context.lineJoin = 'round';
+    context.lineCap = 'round';
+    if (shape === 'drop') {
+        // 水滴：朝运动方向的尖头 + 圆润的尾部，配一个月牙高光。
+        context.beginPath();
+        context.moveTo(unit * 2.2, 0);
+        context.bezierCurveTo(unit * .9, unit * .95, unit * .6, unit * 1.15, -unit * .35, unit * 1.05);
+        context.bezierCurveTo(-unit * 1.5, unit * .9, -unit * 1.5, -unit * .9, -unit * .35, -unit * 1.05);
+        context.bezierCurveTo(unit * .6, -unit * 1.15, unit * .9, -unit * .95, unit * 2.2, 0);
+        context.closePath();
+        context.fillStyle = paint(.95);
+        context.fill();
+        context.beginPath();
+        context.ellipse(-unit * .38, -unit * .34, unit * .4, unit * .26, -.5, 0, Math.PI * 2);
+        context.fillStyle = 'rgba(255,255,255,.88)';
+        context.fill();
+    } else if (shape === 'shard') {
+        // 碎片：带白色锋边的三角棱片，旋转时像玻璃渣反光。
+        context.beginPath();
+        context.moveTo(unit * 1.9, 0);
+        context.lineTo(-unit * .9, unit * .85);
+        context.lineTo(-unit * .3, -unit * .95);
+        context.closePath();
+        context.fillStyle = paint(.5);
+        context.fill();
+        context.strokeStyle = 'rgba(255,255,255,.92)';
+        context.lineWidth = unit * .2;
+        context.stroke();
+    } else if (shape === 'ember') {
+        // 火星：拉长的光尾 + 白热的头部。
+        const tail = context.createLinearGradient(-unit * 2.4, 0, unit * 1.1, 0);
+        tail.addColorStop(0, paint(0));
+        tail.addColorStop(1, paint(.95));
+        context.strokeStyle = tail;
+        context.lineWidth = unit * .52;
+        context.beginPath();
+        context.moveTo(-unit * 2.4, 0);
+        context.lineTo(unit * 1.05, 0);
+        context.stroke();
+        context.beginPath();
+        context.arc(unit * 1.05, 0, unit * .42, 0, Math.PI * 2);
+        context.fillStyle = 'rgba(255,244,196,.98)';
+        context.fill();
+    } else if (shape === 'arc') {
+        // 能量弧：一道折线闪电，粗细两层描边叠出电弧辉光。
+        context.strokeStyle = paint(.82);
+        context.lineWidth = unit * .55;
+        context.beginPath();
+        context.moveTo(-unit * 1.7, unit * .1);
+        context.lineTo(-unit * .55, -unit * .75);
+        context.lineTo(-unit * .1, -unit * .05);
+        context.lineTo(unit * .8, unit * .78);
+        context.lineTo(unit * 1.6, -unit * .05);
+        context.stroke();
+        context.strokeStyle = 'rgba(255,255,255,.95)';
+        context.lineWidth = unit * .2;
+        context.stroke();
+    } else if (shape === 'bubble') {
+        // 虹彩泡：彩色细环 + 高光点，内部只留极淡的填充。
+        const ring = context.createLinearGradient(-unit, -unit, unit, unit);
+        ring.addColorStop(0, 'rgba(196,255,250,.95)');
+        ring.addColorStop(.5, paint(.88));
+        ring.addColorStop(1, 'rgba(255,192,250,.92)');
+        context.beginPath();
+        context.arc(0, 0, unit * 1.05, 0, Math.PI * 2);
+        context.fillStyle = paint(.12);
+        context.fill();
+        context.strokeStyle = ring;
+        context.lineWidth = unit * .26;
+        context.stroke();
+        context.beginPath();
+        context.arc(-unit * .36, -unit * .36, unit * .2, 0, Math.PI * 2);
+        context.fillStyle = 'rgba(255,255,255,.92)';
+        context.fill();
+    } else if (shape === 'flash') {
+        // 余辉光核：只保留柔光，用于冲击闪光与缓慢消退的余辉。
+        const core = context.createRadialGradient(0, 0, 0, 0, 0, unit * 1.4);
+        core.addColorStop(0, 'rgba(255,255,255,.95)');
+        core.addColorStop(.5, paint(.5));
+        core.addColorStop(1, paint(0));
+        context.fillStyle = core;
+        context.beginPath();
+        context.arc(0, 0, unit * 1.4, 0, Math.PI * 2);
+        context.fill();
+    } else {
+        // 柔光团：果冻质感的软体光团，中心亮、边缘化开。
+        const body = context.createRadialGradient(-unit * .3, -unit * .34, unit * .12, 0, 0, unit * 1.5);
+        body.addColorStop(0, 'rgba(255,255,255,.92)');
+        body.addColorStop(.45, paint(.78));
+        body.addColorStop(1, paint(.05));
+        context.fillStyle = body;
+        context.beginPath();
+        context.arc(0, 0, unit * 1.5, 0, Math.PI * 2);
+        context.fill();
+    }
+    context.restore();
+    spriteCache.set(key, canvas);
+    return canvas;
+}
+
+function drawAdvancedParticle(context, particle, alpha) {
+    const sprite = particleSprite(particle.shape, particle.color);
+    let drawSize = SPRITE_SIZE * (particle.size / SPRITE_UNIT);
+    if (particle.shape === 'blob') drawSize *= 1 + Math.sin(particle.phase + particle.life * 9) * .16;
+    if (particle.shape === 'bubble') drawSize *= 1 + Math.sin(particle.phase + particle.life * 6) * .08;
+    context.save();
+    context.translate(particle.x, particle.y);
+    context.rotate(particle.rotation);
+    context.globalAlpha = Math.max(0, Math.min(1, alpha));
+    context.drawImage(sprite, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+    context.restore();
+}
+
+function drawAdvancedWave(context, wave, progress) {
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const radius = wave.inward
+        ? wave.maxRadius - (wave.maxRadius - wave.radius) * eased
+        : wave.radius + (wave.maxRadius - wave.radius) * eased;
+    if (radius < 1) return;
+    const rgb = hexToRgb(wave.color);
+    const alpha = Math.pow(1 - progress, 1.25) * (wave.alpha ?? .85);
+    const full = wave.spread >= Math.PI - .01;
+    context.save();
+    context.translate(wave.x, wave.y);
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = `rgba(${rgb.r},${rgb.g},${rgb.b},${alpha})`;
+    context.lineWidth = Math.max(1, wave.width * (1 - progress * .72));
+    if (wave.dashed) context.setLineDash([10, 8]);
+    context.beginPath();
+    if (full && wave.material === 'gel') {
+        context.ellipse(0, 0, radius, radius * .74, 0, 0, Math.PI * 2);
+    } else if (full) {
+        context.arc(0, 0, radius, 0, Math.PI * 2);
+    } else {
+        context.arc(0, 0, radius, wave.direction - wave.spread, wave.direction + wave.spread);
+    }
+    context.stroke();
+    if (!full) {
+        // 方向冲击波在撞击正前方再补一道更亮更窄的波前高光。
+        context.setLineDash([]);
+        context.strokeStyle = `rgba(255,255,255,${alpha * .72})`;
+        const lead = wave.spread * .4;
+        context.beginPath();
+        context.arc(0, 0, radius * 1.04, wave.direction - lead, wave.direction + lead);
+        context.stroke();
+    }
+    context.restore();
+}
+
+function renderAdvancedEffects(frameTime) {
+    const setup = ensureEffectsContext();
+    if (!setup) return;
+    const { canvas, context, width, height, dpr } = setup;
+    const hasContent = advancedParticles.length || advancedWaves.length || activeGlows.length;
+    if (!hasContent) {
+        if (!effectsHadContent) return;
+        // 余辉收尾：先继续淡化几帧，再彻底清屏，避免画布留下永久残影。
+        effectsIdleFrames += 1;
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.globalCompositeOperation = 'destination-out';
+        context.globalAlpha = 1;
+        context.fillStyle = 'rgba(0, 0, 0, .5)';
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        if (effectsIdleFrames > 3) {
+            context.globalCompositeOperation = 'source-over';
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            effectsHadContent = false;
+            effectsIdleFrames = 0;
+        }
+        return;
+    }
+    effectsHadContent = true;
+    effectsIdleFrames = 0;
+    const elapsed = Math.min(.05, Math.max(.001, (frameTime - effectsLastFrame) / 1000 || .016));
+    effectsLastFrame = frameTime;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.globalCompositeOperation = 'destination-out';
+    context.globalAlpha = 1;
+    // 逐帧淡化上一帧而不是清空：高速粒子自然拖出尾迹，光晕也会缓缓消退。
+    context.fillStyle = 'rgba(0, 0, 0, .34)';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    context.globalCompositeOperation = 'lighter';
+
+    for (let index = advancedWaves.length - 1; index >= 0; index -= 1) {
+        const wave = advancedWaves[index];
+        wave.life += elapsed;
+        if (wave.life >= wave.maxLife) { advancedWaves.splice(index, 1); continue; }
+        drawAdvancedWave(context, wave, wave.life / wave.maxLife);
+    }
+
+    for (let index = activeGlows.length - 1; index >= 0; index -= 1) {
+        const glow = activeGlows[index];
+        glow.life += elapsed;
+        if (glow.life >= glow.maxLife) {
+            activeGlows[index] = activeGlows[activeGlows.length - 1];
+            activeGlows.pop();
+            glowPool.push(glow);
+            continue;
+        }
+        const progress = glow.life / glow.maxLife;
+        const radius = glow.size * (1 + glow.growth * progress);
+        context.globalAlpha = Math.pow(1 - progress, 1.8) * glow.peak;
+        context.drawImage(particleSprite('flash', glow.color), glow.x - radius, glow.y - radius, radius * 2, radius * 2);
+    }
+
+    for (let index = advancedParticles.length - 1; index >= 0; index -= 1) {
+        const particle = advancedParticles[index];
+        particle.life += elapsed;
+        if (particle.life >= particle.maxLife) {
+            // 火星熄灭时偶尔化作一小团余烬，是最典型的余辉来源。
+            if (particle.shape === 'ember' && Math.random() < .3) {
+                spawnAfterglow(particle.x, particle.y, particle.size * 1.6, particle.color, .34, 1.1, .5);
+            }
+            advancedParticles[index] = advancedParticles[advancedParticles.length - 1];
+            advancedParticles.pop();
+            releaseParticle(particle);
+            continue;
+        }
+        particle.vx *= Math.pow(particle.drag, elapsed * 60);
+        particle.vy = particle.vy * Math.pow(particle.drag, elapsed * 60) + particle.gravity * elapsed;
+        particle.x += particle.vx * elapsed;
+        particle.y += particle.vy * elapsed;
+        const aligned = particle.shape === 'drop' || particle.shape === 'ember' || particle.shape === 'arc';
+        if (aligned && Math.hypot(particle.vx, particle.vy) > 6) {
+            particle.rotation = Math.atan2(particle.vy, particle.vx);
+        } else {
+            particle.rotation += particle.spin * elapsed;
+        }
+        if (particle.x < -48 || particle.x > width + 48 || particle.y < -48 || particle.y > height + 48) {
+            advancedParticles[index] = advancedParticles[advancedParticles.length - 1];
+            advancedParticles.pop();
+            releaseParticle(particle);
+            continue;
+        }
+        drawAdvancedParticle(context, particle, Math.pow(1 - particle.life / particle.maxLife, 1.3));
+    }
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = 'source-over';
+}
+
 function createSoftParticles(ball, type = 'release', amount = 13) {
     if (!ball?.classList.contains('video-gesture-ball')) return;
+    emitAdvancedParticles(ball, type, amount);
     const layer = document.querySelector('.ball-particle-layer');
     const area = ball.closest('.video-container');
     if (!layer || !area) return;
     // 控制临时 DOM 数量，避免多球连续碰撞时粒子反过来拖慢手势识别。
     const particleBudget = Math.max(0, 120 - layer.querySelectorAll('.soft-particle, .ball-motion-trail').length);
-    amount = Math.min(amount, particleBudget);
+    // 少量DOM星芒作为锐利前景，粒子、冲击波和余辉主体交给 Canvas 特效层批量绘制。
+    amount = Math.min(Math.ceil(amount * .42), particleBudget);
     if (!amount) return;
 
     const metrics = ballVisualMetrics(ball);
@@ -467,8 +974,8 @@ function createMotionTrail(ball) {
     trail.addEventListener('animationend', () => trail.remove(), { once: true });
 }
 
-// 爆裂粒子：比普通命中更多、更远的多彩粒子，从球心向四周炸开。
-function createBurstParticles(ball, amount = 42) {
+// 爆裂星芒：作为 Canvas 爆裂粒子的锐利前景，只保留少量 DOM 节点。
+function createBurstParticles(ball, amount = 16) {
     if (!ball?.classList.contains('video-gesture-ball')) return;
     const layer = document.querySelector('.ball-particle-layer');
     const area = ball.closest('.video-container');
@@ -523,8 +1030,11 @@ function explodeBall(ball, state, index) {
     const area = ball.closest('.video-container');
     if (!area || ball.classList.contains('exploding')) return;
     ball.classList.add('ball-explode', 'exploding');
-    createBurstParticles(ball, 42);
+    state.lastImpactSpeed = 260;
+    emitAdvancedParticles(ball, 'burst', 48);
+    createBurstParticles(ball);
     createBlastRing(ball);
+    playSfx('explode', { material: state.material });
     window.setTimeout(() => {
         ball.classList.remove('ball-explode', 'exploding');
         respawnBall(ball, state, index, area);
@@ -642,20 +1152,12 @@ function syncLiveHand(x, y, gesture, hand, canvas, areaRect, allHands = [hand]) 
     }
 }
 
+// 记录食指轨迹点，供球体跟随轨迹与环形轨道玩法使用（不再绘制可见拖尾）。
 function recordFingerPath(point, now) {
-    if (now - lastPathParticleAt < 38) return;
-    lastPathParticleAt = now;
+    if (now - lastPathSampleAt < 38) return;
+    lastPathSampleAt = now;
     fingerPath.push({ x: point.x, y: point.y, at: now });
     fingerPath = fingerPath.filter(item => now - item.at < 5200).slice(-90);
-    const layer = document.querySelector('.ball-particle-layer');
-    if (layer) {
-        const dot = document.createElement('i');
-        dot.className = 'gesture-path-point';
-        dot.style.left = `${point.x}px`;
-        dot.style.top = `${point.y}px`;
-        layer.appendChild(dot);
-        window.setTimeout(() => dot.remove(), 5200);
-    }
     if (fingerPath.length < 24) return;
     const recent = fingerPath.slice(-36);
     const first = recent[0];
@@ -799,12 +1301,16 @@ function resolvePhysicalHandContact(ball, state, size, material, frameTime) {
 
     if (impactSpeed > 14 && frameTime - (state.lastContactEffect || 0) > 72) {
         state.lastContactEffect = frameTime;
+        // 记录撞击法线与强度：Canvas 特效层据此把冲击波和粒子沿真实接触方向甩出。
+        state.contactNormal = { x: nx, y: ny };
+        state.lastImpactSpeed = impactSpeed;
         ball.style.setProperty('--contact-angle', `${Math.atan2(ny, nx)}rad`);
         ball.style.setProperty('--contact-strength', `${Math.min(.28, .055 + impactSpeed / 1250).toFixed(3)}`);
         ball.classList.remove('physical-contact');
         requestAnimationFrame(() => ball.classList.add('physical-contact'));
         window.setTimeout(() => ball.classList.remove('physical-contact'), 210);
         createSoftParticles(ball, 'hit', impactSpeed > 210 ? 14 : impactSpeed > 80 ? 9 : 6);
+        playSfx('hit', { material: material.id, intensity: impactSpeed });
         if (material.brittle && impactSpeed > 300) {
             const index = [...document.querySelectorAll('.video-gesture-ball')].indexOf(ball);
             explodeBall(ball, state, Math.max(0, index));
@@ -919,6 +1425,8 @@ function applyImmediateHandHit() {
         }
         state.vx += nx * strength + liveHandState.vx * .5;
         state.vy += ny * strength + liveHandState.vy * .5;
+        state.contactNormal = { x: nx, y: ny };
+        state.lastImpactSpeed = speed;
         state.lastHit = now;
         state.touched = true;
         state.lastTouchedAt = now;
@@ -926,6 +1434,7 @@ function applyImmediateHandHit() {
         setBallMood(ball, state, speed > 220 ? 'angry' : 'playful');
         pulseBall(ball);
         createSoftParticles(ball, 'hit', isFingerPoke ? 6 : 9);
+        playSfx('hit', { material: material.id, intensity: isFingerPoke ? 90 : speed });
         updateFieldHud(isFingerPoke ? '指尖弹击' : '整手拍击', material.label);
     });
 }
@@ -954,6 +1463,7 @@ function initialiseBallState(ball, index, area, force = false) {
         lastContactEffect: 0,
         lastFieldParticle: 0,
         lastTrail: 0,
+        lastStreak: 0,
         lastWallHit: 0,
         touched: false
     };
@@ -984,6 +1494,7 @@ function respawnBall(ball, state, index, area) {
     state.lastContactEffect = 0;
     state.lastFieldParticle = 0;
     state.lastTrail = 0;
+    state.lastStreak = 0;
     state.lastPoke = 0;
     state.lastWallHit = 0;
     state.touched = false;
@@ -1006,6 +1517,7 @@ function mergeBalls(first, firstState, second, secondState, area, secondIndex, f
     first.style.setProperty('--ball-size', `${mergedSize}px`);
     pulseBall(first);
     createSoftParticles(first, 'grab', 20);
+    playSfx('merge');
     updateFieldHud('同材质融合 · 体积增长', materialById(firstState.material).label);
     respawnBall(second, secondState, secondIndex, area);
 }
@@ -1174,6 +1686,7 @@ function applyPortalAndGroupField(ball, state, size, elapsed, frameTime, area) {
             state.portalCooldown = frameTime + 900;
             state.touched = true;
             createSoftParticles(ball, 'hit', 16);
+            playSfx('portal');
             updateFieldHud('双手传送门 · 瞬移');
         }
     }
@@ -1396,22 +1909,36 @@ function animateVideoBalls(frameTime) {
 
             state.x += state.vx * elapsed;
             state.y += state.vy * elapsed;
-            if (Math.hypot(state.vx, state.vy) > 210 && frameTime - state.lastTrail > 260) {
+            const speedNow = Math.hypot(state.vx, state.vy);
+            if (speedNow > 210 && frameTime - state.lastTrail > 260) {
                 createMotionTrail(ball);
                 state.lastTrail = frameTime;
             }
+            // 高速球体持续在 Canvas 层留下材质形状的尾迹粒子，由余辉串成光带。
+            if (speedNow > 260 && frameTime - (state.lastStreak || 0) > 110) {
+                emitAdvancedParticles(ball, 'trail', 2);
+                state.lastStreak = frameTime;
+            }
             const maxX = Math.max(0, area.clientWidth - size);
             if (state.x <= 0 || state.x >= maxX) {
+                const wallNormal = state.x <= 0 ? 1 : -1;
                 state.x = Math.max(0, Math.min(state.x, maxX));
                 state.vx *= -material.bounce;
                 // 球被压在画面边缘时每隔一段时间才脉冲一次，避免每帧重启动画造成闪烁。
                 if (frameTime - state.lastWallHit > 260) {
                     pulseBall(ball);
                     state.lastWallHit = frameTime;
+                    // 记录墙面法线，让粒子沿墙面溅开，反弹也有方向感。
+                    state.contactNormal = { x: wallNormal, y: 0 };
+                    state.lastImpactSpeed = Math.abs(state.vx) + 70;
+                    createSoftParticles(ball, 'hit', 5);
                 }
             }
             if (state.y >= area.clientHeight + size * .25) {
                 // 不设置“地面”：球从画面底部自由离场并消失，再从顶部重新进入。
+                state.contactNormal = { x: 0, y: -1 };
+                state.lastImpactSpeed = 240;
+                createSoftParticles(ball, 'hit', 7);
                 respawnBall(ball, state, index, area);
             }
             renderBallPosition(ball, state);
@@ -1425,6 +1952,9 @@ function animateVideoBalls(frameTime) {
             renderBallPosition(ball, state);
         });
     }
+    // Canvas 特效层与球体物理共用同一帧时钟：DOM 只负责球体与少量前景星芒，
+    // 粒子、冲击波和余辉全部由这一层批量绘制。
+    renderAdvancedEffects(frameTime);
     requestAnimationFrame(animateVideoBalls);
 }
 
@@ -1493,6 +2023,7 @@ function splitBall(ball) {
     renderBallPosition(ball, state);
     renderBallPosition(clone, cloneState);
     createSoftParticles(ball, 'hit', 26);
+    playSfx('split');
     updateFieldHud('双手拉裂 · 一球分为两球', materialById(state.material).label);
 }
 
@@ -1504,6 +2035,7 @@ function finishTwoHandStretch() {
     ball.style.removeProperty('--stretch-scale-y');
     ball.style.removeProperty('--stretch-angle');
     createSoftParticles(ball, 'release', 18);
+    playSfx('release');
     if (twoHandStretch.peakStretch > 1.52) splitBall(ball);
     if (grabbedObject === ball) grabbedObject = null;
     twoHandStretch = null;
@@ -1531,6 +2063,7 @@ function updateTwoHandStretch(hands, canvas, area) {
         bringToFront(ball);
         ball.classList.add('grabbing', 'two-hand-stretch');
         createSoftParticles(ball, 'grab', 18);
+        playSfx('grab');
         twoHandStretch = {
             ball,
             initialDistance: Math.max(distance, 70),
@@ -1768,6 +2301,7 @@ function tryGrabObject(cursorX, cursorY) {
         setBallMood(obj, ballState, 'happy');
     }
     createSoftParticles(obj, 'grab', 20);
+    playSfx('grab');
     if (!isVideoBall) showReaction(obj);
 }
 
@@ -1828,6 +2362,7 @@ function beginPointerDrag(event) {
     object.classList.add('grabbing');
     const ballState = ballStates.get(object);
     if (ballState) ballState.touched = true;
+    playSfx('grab');
     object.setPointerCapture?.(event.pointerId);
     event.preventDefault();
 }
@@ -1857,6 +2392,7 @@ function endPointerDrag(event) {
     element.style.removeProperty('--grab-scale-x');
     element.style.removeProperty('--grab-scale-y');
     createSoftParticles(element, 'release');
+    playSfx('release');
     const pointerId = event?.pointerId;
     if (typeof pointerId === 'number' && element.hasPointerCapture?.(pointerId)) {
         element.releasePointerCapture(pointerId);
@@ -1894,6 +2430,7 @@ function releaseObject() {
         grabbedObject.style.removeProperty('--stretch-angle');
         grabbedObject = null;
         createSoftParticles(releasedObject, 'release');
+        playSfx('release');
         // 重置偏移量
         grabOffset = { x: 0, y: 0 };
     }
@@ -1915,6 +2452,7 @@ function resetInteraction() {
     pathOrbit = null;
     clearBodyPose();
     renderEnergyRope(null, null, false);
+    clearAdvancedEffects();
     if (reactionTimer) clearTimeout(reactionTimer);
     const popup = document.getElementById('reactionPopup');
     popup?.classList.remove('show');

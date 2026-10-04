@@ -3,6 +3,7 @@ import { initDetector, detectHands, stopDetection } from './js/detector.js';
 import { resetInteraction, resetVideoBalls } from './js/interaction.js';
 import { updateStatus, updateInteractionStatus } from './js/utils.js';
 import { initSpeechSynthesis } from './js/voice.js';
+import { unlockSfx } from './js/sfx.js';
 let voice = initSpeechSynthesis();
 // 全局变量
 let video;
@@ -60,6 +61,7 @@ const MODE_CONFIG = {
         { title: '连续力场', detail: '张掌斥力、握拳引力、旋转手掌形成涡流，手指张幅控制范围' },
         { title: '双手空间', detail: '双手靠近或展开压缩/膨胀球群，两掌之间形成传送门和能量绳' },
         { title: '六种材质', detail: '水、果冻、玻璃、火焰、磁力和泡泡拥有不同重力、弹性与特殊反应' },
+        { title: '材质粒子', detail: '碰撞会按材质溅出水滴、柔光团、碎片、火星、能量弧和虹彩泡，带方向冲击波与余辉' },
         { title: '融合与分裂', detail: '低速相碰的同材质球会融合，双手捏合拉开可把大球分裂' },
         { title: '身体场景', detail: '球可与肩、手臂、身体和腿部轮廓碰撞并沿轮廓滚动' },
         { title: '情绪生命', detail: '球会好奇靠近、害羞躲避、开心绕手、受击生气或因冷落变孤独' },
@@ -201,6 +203,8 @@ async function toggleCamera() {
   } else {
     // 启动摄像头
     try {
+      // 摄像头按钮是明确的用户手势，顺手解锁交互音效的音频上下文。
+      unlockSfx();
       // 播报与摄像头启动并行，避免部分浏览器的语音事件不返回时阻塞摄像头。
       voice.synthesizeSpeechSentenceBySentence("摄像头启动中")
       await setupCamera(video, canvas, document.body.dataset.mode);

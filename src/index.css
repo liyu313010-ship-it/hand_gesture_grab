@@ -766,7 +766,16 @@ body[data-mode='ball'] .interaction-section { display: none; }
 }
 body[data-mode='ball'] .air-control-hud { display: flex; }
 body[data-mode='ball'] .innovation-hud { display: flex; }
-.ball-particle-layer { position: absolute; inset: 0; z-index: 8; overflow: hidden; pointer-events: none; }
+.effects-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.ball-particle-layer { position: absolute; inset: 0; z-index: 9; overflow: hidden; pointer-events: none; }
 .body-collider-line,
 .energy-rope {
   position: absolute;
@@ -786,18 +795,7 @@ body[data-mode='ball'] .innovation-hud { display: flex; }
   box-shadow: 0 0 12px #72e5ff, 0 0 22px rgba(181,108,255,.7);
   animation: energy-rope-pulse .46s ease-in-out infinite alternate;
 }
-.gesture-path-point {
-  position: absolute;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 8px #6ce5ff, 0 0 16px #a86cff;
-  transform: translate(-50%, -50%);
-  animation: gesture-path-fade 5.2s linear forwards;
-}
 @keyframes energy-rope-pulse { to { filter: brightness(1.35); transform-origin: 0 50%; } }
-@keyframes gesture-path-fade { 0%, 74% { opacity: .9; } 100% { opacity: 0; } }
 .soft-particle {
   position: absolute;
   width: var(--particle-size, 8px);
